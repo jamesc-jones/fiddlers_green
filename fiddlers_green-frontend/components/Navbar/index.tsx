@@ -9,6 +9,7 @@ import { motion, AnimatePresence } from "framer-motion";
 // Add, rename, or reorder links here. The rest of the component updates automatically.
 
 const NAV_LINKS = [
+  { label: "Home",     href: "/"         },
   { label: "Catalog",  href: "/catalog"  },
   { label: "Heritage", href: "/heritage" },
   { label: "Contact",  href: "/contact"  },
@@ -21,12 +22,12 @@ const mobileMenuVariants = {
   closed: {
     opacity: 0,
     y: "-100%",
-    transition: { duration: 0.35, ease: [0.32, 0, 0.67, 0] },
+    transition: { duration: 0.35, ease: [0.32, 0, 0.67, 0] as const },
   },
   open: {
     opacity: 1,
     y: "0%",
-    transition: { duration: 0.4, ease: [0.33, 1, 0.68, 1] },
+    transition: { duration: 0.4, ease: [0.33, 1, 0.68, 1] as const },
   },
 };
 
@@ -35,7 +36,7 @@ const mobileLinkVariants = {
   open:   (i: number) => ({
     opacity: 1,
     y: 0,
-    transition: { delay: i * 0.07 + 0.15, duration: 0.4, ease: "easeOut" },
+    transition: { delay: i * 0.07 + 0.15, duration: 0.4, ease: "easeOut" as const },
   }),
 };
 
@@ -61,10 +62,14 @@ export default function Navbar() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
 
-  // Close mobile menu when navigating to a new page
-  useEffect(() => {
+  // Close mobile menu when navigating to a new page.
+  // Adjusted during render (not in an effect) per React's guidance for
+  // resetting state in response to a prop/derived-value change.
+  const [prevPathname, setPrevPathname] = useState(pathname);
+  if (pathname !== prevPathname) {
+    setPrevPathname(pathname);
     setIsMenuOpen(false);
-  }, [pathname]);
+  }
 
   // Detect scroll position to toggle the frosted-glass background
   useEffect(() => {
