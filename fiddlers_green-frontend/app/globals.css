@@ -2,7 +2,70 @@
 @tailwind components;
 @tailwind utilities;
 
-body {
-  background-color: black;
-  color: white;
+/* ─── Brand design tokens ──────────────────────────────────────────────────────
+   Use these in Tailwind via: [color:var(--color-brand-gold)]
+   Or reference them in raw CSS anywhere in the project.
+──────────────────────────────────────────────────────────────────────────────── */
+:root {
+  --color-brand-gold:    #c9a84c;
+  --color-brand-smoke:   #8a9a8a;
+  --color-brand-cream:   #f5f0e8;
+  --color-brand-charcoal: #1a1a1a;
+}
+
+/* ─── Base layer ───────────────────────────────────────────────────────────────
+   These are the lowest-level defaults. Tailwind utility classes can override
+   any of these on individual elements.
+──────────────────────────────────────────────────────────────────────────────── */
+@layer base {
+  html {
+    scroll-behavior: smooth;
+    /* Prevents layout shift when a scrollbar appears/disappears */
+    scrollbar-gutter: stable;
+  }
+
+  body {
+    background-color: #000;
+    color: var(--color-brand-cream);
+    font-family: var(--font-body), system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* Display font on all headings */
+  h1, h2, h3, h4, h5, h6 {
+    font-family: var(--font-display), Georgia, serif;
+    letter-spacing: -0.02em;
+  }
+
+  /* Brand-colored focus ring for accessibility */
+  :focus-visible {
+    outline: 2px solid var(--color-brand-gold);
+    outline-offset: 3px;
+    border-radius: 2px;
+  }
+
+  /* Remove default focus ring — :focus-visible handles it cleanly */
+  :focus:not(:focus-visible) {
+    outline: none;
+  }
+}
+
+/* ─── Utility extensions ───────────────────────────────────────────────────────
+   Custom utilities that Tailwind doesn't provide out of the box.
+   Use these as class names: className="text-brand-gold"
+──────────────────────────────────────────────────────────────────────────────── */
+@layer utilities {
+  .text-brand-gold   { color: var(--color-brand-gold); }
+  .text-brand-smoke  { color: var(--color-brand-smoke); }
+  .text-brand-cream  { color: var(--color-brand-cream); }
+
+  .bg-brand-gold    { background-color: var(--color-brand-gold); }
+  .bg-brand-charcoal { background-color: var(--color-brand-charcoal); }
+
+  .border-brand-gold { border-color: var(--color-brand-gold); }
+
+  /* Font family helpers — apply these to override the base */
+  .font-display { font-family: var(--font-display), Georgia, serif; }
+  .font-body    { font-family: var(--font-body), system-ui, sans-serif; }
 }
