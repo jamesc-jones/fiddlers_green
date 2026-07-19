@@ -1,3 +1,4 @@
+import Link from "next/link";
 import type { Category } from "@/data/products";
 
 export default function CatalogCover({
@@ -24,16 +25,24 @@ export default function CatalogCover({
           className="mt-10 flex flex-wrap items-center justify-center gap-x-8 gap-y-3"
           role="list"
         >
-          {categories.map((category) => (
-            <li key={category.id}>
-              <a
-                href={`#${category.anchor}`}
-                className="font-body text-sm tracking-[0.15em] uppercase text-white/50 hover:text-brand-gold transition-colors duration-200"
-              >
-                {category.label}
-              </a>
-            </li>
-          ))}
+          {categories.map((category) => {
+            const isExperience = category.id === "gummies";
+            const LinkComponent = isExperience ? Link : "a";
+            const href = isExperience
+              ? `/catalog/${category.id}`
+              : `#${category.anchor}`;
+
+            return (
+              <li key={category.id}>
+                <LinkComponent
+                  href={href}
+                  className="font-body text-sm tracking-[0.15em] uppercase text-white/50 hover:text-brand-gold transition-colors duration-200"
+                >
+                  {category.label}
+                </LinkComponent>
+              </li>
+            );
+          })}
         </ul>
       </div>
     </section>
