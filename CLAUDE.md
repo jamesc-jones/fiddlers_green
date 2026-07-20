@@ -44,10 +44,10 @@ Key versions actually installed: Next.js 16.2.10, React 19.2.4. The App Router (
 
 ### Current state
 
-All primary routes are implemented and validated. The project has completed through Phase 7 — Micro Animations. The next phase is Phase 8 — First Polish Pass.
+All primary routes are implemented and validated. The project has completed through Phase 9 — Cinematic Intro. The next phase is Phase 10 (optional) — AI Assistant, or Phase 11 — Final Polish & Production Preparation.
 
 **Route status:**
-- `/` — Hero section fully implemented (Phase 3)
+- `/` — Hero section (Phase 3) plus a skippable cinematic intro sequence on first visit per session (Phase 9)
 - `/catalog` — Editorial catalog with categories, product cards, hover effects (Phase 4)
 - `/catalog/gummies` — Interactive two-stage Haney Pot strength selector (Phase 5)
 - `/catalog/gummies/[strength]` — Stubbed strength detail page (to be expanded)
@@ -57,7 +57,9 @@ All primary routes are implemented and validated. The project has completed thro
 
 **Component directories in use:**
 - `components/Navbar/` — Shared persistent navigation
-- `components/Hero.tsx` — Homepage hero with northern lights atmosphere (Phase 7)
+- `components/Hero.tsx` — Homepage hero with northern lights atmosphere (Phase 7); accepts a `skipEntrance` prop so it can render already-settled when the Phase 9 intro owns the reveal
+- `components/HomeClient.tsx` — Client orchestrator for `/`; decides whether the intro plays and coordinates it with `Hero` (Phase 9)
+- `components/IntroSequence/` — Cinematic intro overlay: `index.tsx`, `SkipButton`, `LogoReveal`, `FeatherSVG`, `ChainFormation`, `WampumReveal` (Phase 9)
 - `components/catalog/` — CatalogCover, CategorySection, ProductCard, TableOfContents, CategoryEffect
 - `components/catalog/gummies/` — GummiesHero, GummiesEntrySelector, StrengthSelector, EntryOptionCard, StrengthButton
 - `components/heritage/` — HeritageHero, ChapterSection, TwoRowWampum, CovenantChain, TyendinagaHistory, HeritageTimeline, HeritageDivider
@@ -146,7 +148,7 @@ Commit: included in Phase 3 delivery.
 
 ### Refactor trigger for Hero
 
-Split `Hero.tsx` into a folder (`Hero/index.tsx` + sub-components) when: file exceeds ~200 lines, a sub-piece becomes reusable elsewhere, or the GSAP intro sequence (Phase 9) is added.
+Split `Hero.tsx` into a folder (`Hero/index.tsx` + sub-components) when: file exceeds ~200 lines, or a sub-piece becomes reusable elsewhere. (Phase 9's cinematic intro ended up living entirely in `components/IntroSequence/` instead, coordinated via a `skipEntrance` prop on Hero — see [Phase 9 Completed](#phase-9-completed--cinematic-intro) below — so it did not trigger this split after all, and no GSAP was introduced.)
 
 ---
 
@@ -264,61 +266,95 @@ Every animation in Phase 7 passed the question: *"Does this make Fiddler's Green
 
 ---
 
+## Phase 8 Completed — First Polish Pass
+
+Commit: `a996f06`
+
+### What was built
+
+**Typography:**
+- Standardised heritage eyebrow labels to `tracking-[0.3em]` + `font-body` across `HeritageHero.tsx` and `ChapterSection.tsx` (was `tracking-widest`, ~3× narrower than catalog/hero eyebrows).
+- Restored `italic` to `HeritageHero` h1 — was missing, inconsistent with all other hero headings across the site.
+- Added `md:text-lg` to `CategorySection` description text for improved legibility at desktop sizes.
+
+**Layout:**
+- Passed `className="max-w-6xl"` from `app/heritage/page.tsx` into the `ChapterSection` wrappers around `TwoRowWampum` and `TyendinagaHistory`. Those sections have internal two-column grids at `max-w-6xl`; the outer `ChapterSection` cap of `max-w-4xl` was constraining them at large viewports.
+
+**Accessibility (`prefers-reduced-motion`):**
+- `Hero.tsx`: northern lights animated gradient layer's `animate` and `transition` props set to `undefined` when `useReducedMotion()` is true — layer renders statically.
+- `CategoryEffect.tsx`: `useReducedMotion()` result passed as prop to `SmokeDrift` and `SparkleDots`; smoke holds static, sparkles render at `opacity: 0.6` without looping animation.
+- `ChapterSection.tsx`: when reduced, `initial={false}`, `whileInView={undefined}`, `animate={{ opacity: 1, y: 0 }}` — content displays immediately without scroll-triggered animation.
+- `HeritageTimeline.tsx`: timeline items appear statically and dot pulse entrance is disabled when reduced. Easing standardised to `[0.22, 1, 0.36, 1] as const` (was `"easeOut"`).
+
+**Motion:**
+- `HeritageHero.tsx`: single entrance `motion.div` split into two — eyebrow animates at 0s, headline+body stagger in at 0.2s delay. More considered than a single simultaneous reveal.
+
+**UX:**
+- `StrengthSelector.tsx`: added `py-2` to back button — corrects a mobile tap target that was effectively ~12px tall.
+- `app/contact/page.tsx`: replaced bare `<h1>Contact</h1>` stub with branded placeholder — dark radial gradient background, gold eyebrow, italic display heading, smoke-coloured body copy. Consistent with site's visual language.
+
+**Docs:**
+- Added comment above `unoptimized` prop in `ProductCard.tsx` flagging it for removal in Phase 11 when real photography replaces placeholder SVGs.
+
+### Validation completed
+
+- `npm run lint` — no errors.
+- `npx tsc --noEmit` — no type errors.
+- `npm run build` — production build clean.
+
+---
+
+## Phase 9 Completed — Cinematic Intro
+
+Commit: `ca2e81d`
+
+### What was built
+
+- `app/page.tsx` — reduced to a thin Server Component rendering `<HomeClient />`.
+- `components/HomeClient.tsx` — client orchestrator for `/`. Decides whether to show the intro inside a layout effect (fires before the browser paints, so there's never a flash of Hero-then-overlay or overlay-then-Hero in either direction), checking `prefers-reduced-motion` and a `sessionStorage` "seen this session" flag (`fg-intro-seen`). Renders `<Hero skipEntrance={showIntro} />` and, only when the intro should play, `<IntroSequence onComplete={...} />`.
+- `components/Hero.tsx` — gained a `skipEntrance?: boolean` prop. When true, its fade-up entrance variants use `initial={false}` instead of `"hidden"`, so Hero renders already-settled rather than replaying its own entrance once the intro overlay fades away.
+- `components/IntroSequence/` — the cinematic overlay, one file per element:
+  - `index.tsx` — fixed fullscreen layer (`z-[100]`, above Navbar's `z-50`); orchestrates the timeline via chained delay constants (each element exports its own duration, and the next element's start is computed by summing prior durations, so the sequence can't silently drift out of sync when a duration changes).
+  - `SkipButton.tsx` — subtle bottom-corner control, auto-focused on mount for keyboard/screen-reader users.
+  - `LogoReveal.tsx` — wordmark + tagline fade/rise.
+  - `FeatherSVG.tsx` — generated line-art feather (curved shaft + tapering barb strokes, no fill), gentle localized drift.
+  - `ChainFormation.tsx` — 5 interlocking gold link outlines, opacity-only staggered fade-in then group fade-out.
+  - `WampumReveal.tsx` — static belt strip reusing the Heritage page's bead-color grammar (purple rows on white/cream); a single fade in → hold → fade out, no per-bead animation.
+
+### Timeline
+
+Sequential, not layered: each cinematic element fully fades to nothing before the next begins, so there's never more than one focal point on screen and the logo always gets a calm, uncontested moment. Total runtime ~3.9s: feather (0.1–0.75s) → chain (0.75–1.73s) → wampum (1.73–2.63s) → quiet beat → logo (2.83–3.33s) → hold → exit fade (3.53–3.88s). Northern lights is the one continuous exception — a soft ambient gradient wash behind everything, not a shape competing for attention.
+
+### Accessibility
+
+- `prefers-reduced-motion`: checked in `HomeClient`'s layout effect; if set, the intro never mounts and Hero renders with its normal entrance immediately — verified via browser emulation, not just code review.
+- Skip: button (keyboard-focusable, auto-focused), Escape key, and click/tap anywhere on the overlay all dismiss it.
+- Intro plays once per browser session (`sessionStorage`), not on every visit to `/`.
+
+### Critical bug found and fixed during validation
+
+The root overlay's exit fade was originally built on Framer Motion's imperative `useAnimate()`, needed because skipping must interrupt an already-scheduled delayed animation (updating only a `transition` prop on an unchanged `animate` target doesn't retrigger a Motion tween). In production-build testing, that imperative `animate()` call reliably failed to resolve when invoked from a click handler or a `setTimeout` callback — the promise never settled, silently leaving the black overlay stuck forever with no console error. Fixed by dropping `useAnimate()` entirely for the root: the overlay's fade is now a plain CSS `transition` + `setTimeout`, opacity-only. Child layers (northern lights, feather, chain, wampum, logo) keep their original declarative Motion `animate` props, which were never affected. Verified reliable across 20+ trials against a production build (natural completion, skip via button, Escape, click-anywhere, reduced motion, mobile viewport).
+
+### Refinement pass (feel, not architecture)
+
+- Feather: peak opacity reduced (~15%), rotation swing narrowed (10° → 5°), travel distance shortened (~35%), eased with a neutral `easeInOut` instead of the brand's snappier ease-out — removes the "arrival" feeling so it reads as ambient rather than a feature.
+- Chain: fixed (non-random, SSR-safe) jitter added to per-link stagger delay and fade duration; per-link easing switched to `easeInOut` so links rise gradually instead of "popping" near-instantly and holding. No movement, scale, or rotation added — opacity only.
+- Wampum was explicitly left untouched — highest cultural weight, "presence not performance": one fade in, a brief hold, one fade out, never a per-bead animation.
+
+### Validation completed
+
+- `npm run lint` — no errors.
+- `npx tsc --noEmit` — no type errors.
+- `npm run build` — production build clean, all 8 routes generated, `/` still static.
+- Manually verified in a browser against a **production build** (not just dev mode, where React's Strict Mode double-invokes effects and can mask or introduce timing differences): natural completion, skip (button/Escape/click-anywhere), reduced-motion bypass, mobile viewport, Hero non-double-animation.
+
+### Deferred / known limitations
+
+- Hero's own content entrance (independent of the intro) still doesn't gate on `prefers-reduced-motion` — only its northern-lights background layer does. An attempted fix caused an SSR/hydration mismatch (`useReducedMotion()` resolves synchronously on the client's first render, but the server always renders as motion-enabled); a proper fix needs the same "resolve before paint, client-side only" pattern `HomeClient` uses for the intro. Pre-existing gap from Phase 3/8, not fixed here.
+
+---
+
 ## Development Roadmap
-
-### Phase 8 — First Polish Pass ← NEXT
-
-**Status: NOT STARTED**
-
-Purpose: make the existing experience feel complete and cohesive before any cinematic intro work begins.
-
-**Visual consistency:**
-- Audit typography hierarchy across all pages — size, weight, and tracking should feel like one system.
-- Audit spacing rhythm — `py-` values between sections should be consistent or intentionally varied.
-- Audit gold usage — ensure brand gold appears purposefully, not casually.
-- Audit color consistency — no off-brand values introduced in earlier phases.
-- Smooth section-to-section transitions (the visual "seam" between sections).
-
-**UX refinement:**
-- Hover state consistency across all interactive elements.
-- Button and link states: hover, focus-visible, active.
-- Navbar behavior edge cases (very short pages, hash-linked pages).
-- Mobile experience end-to-end: tap targets, spacing, font legibility.
-
-**Motion review:**
-- Verify all animations read as one system (easing, duration, timing conventions).
-- Remove any effect that doesn't survive: *"Does this make Fiddler's Green feel more premium?"*
-- Add `useReducedMotion()` support (`prefers-reduced-motion`) where not yet present.
-
-**Performance:**
-- Image optimization pass (`next/image` sizing, format, priority flags).
-- Animation performance: check for layout thrash, prefer `transform`/`opacity` only.
-- Component review: identify any unnecessary client boundaries.
-
----
-
-### Phase 9 — Intro Animation (Optional / GSAP)
-
-**Status: FUTURE — OPTIONAL**
-
-Purpose: add the signature cinematic opening sequence. Only begin after Phase 8 is complete and the core experience is polished.
-
-Potential sequence:
-1. Dark screen hold
-2. Feather falls into frame
-3. Covenant Chain links form across screen
-4. Wampum belt transition
-5. Logo reveal
-6. Hero entrance (hands off to existing Phase 3 Hero)
-
-**Hard rules before implementation:**
-- Must be skippable (click/tap/key to skip).
-- Must not delay content access by more than ~3s including skip.
-- Must respect `prefers-reduced-motion` (skip entirely if preference is set).
-- GSAP is permitted for this phase only — keep it isolated from all other animation code.
-- If it doesn't clearly enhance the brand: remove it.
-
----
 
 ### Phase 10 — AI Assistant (Optional)
 
