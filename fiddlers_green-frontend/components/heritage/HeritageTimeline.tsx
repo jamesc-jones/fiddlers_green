@@ -1,6 +1,8 @@
 "use client";
 
-import { motion } from "framer-motion";
+import { motion, useReducedMotion } from "framer-motion";
+
+const EASE = [0.22, 1, 0.36, 1] as const;
 
 interface TimelineItem {
   year: string;
@@ -31,6 +33,8 @@ const TIMELINE_ITEMS: TimelineItem[] = [
 ];
 
 export default function HeritageTimeline() {
+  const shouldReduceMotion = useReducedMotion();
+
   return (
     <div className="max-w-2xl mx-auto relative pl-8 md:pl-10">
       <div className="absolute left-2 md:left-2.5 top-0 bottom-0 w-px bg-brand-gold/30" />
@@ -38,17 +42,21 @@ export default function HeritageTimeline() {
         {TIMELINE_ITEMS.map((item, index) => (
           <motion.div
             key={item.year}
-            initial={{ opacity: 0, x: -16 }}
-            whileInView={{ opacity: 1, x: 0 }}
+            initial={shouldReduceMotion ? false : { opacity: 0, x: -16 }}
+            whileInView={shouldReduceMotion ? undefined : { opacity: 1, x: 0 }}
+            animate={shouldReduceMotion ? { opacity: 1, x: 0 } : undefined}
             viewport={{ once: true }}
             transition={{ duration: 0.6, delay: index * 0.1 }}
             className="relative"
           >
             <motion.span
-              initial={{ scale: 1, opacity: 0.7 }}
-              whileInView={{ scale: [1, 1.3, 1], opacity: [0.7, 1, 1] }}
+              initial={shouldReduceMotion ? false : { scale: 1, opacity: 0.7 }}
+              whileInView={
+                shouldReduceMotion ? undefined : { scale: [1, 1.3, 1], opacity: [0.7, 1, 1] }
+              }
+              animate={shouldReduceMotion ? { scale: 1, opacity: 1 } : undefined}
               viewport={{ once: true }}
-              transition={{ duration: 0.6, delay: index * 0.1 + 0.3, ease: "easeOut" }}
+              transition={{ duration: 0.6, delay: index * 0.1 + 0.3, ease: EASE }}
               className="absolute -left-8 md:-left-10 top-1 h-2 w-2 rounded-full bg-brand-gold"
             />
             <p className="font-display text-xl md:text-2xl text-brand-gold">

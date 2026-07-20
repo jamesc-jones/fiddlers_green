@@ -29,7 +29,7 @@ export default function StrengthSelector({
       <button
         type="button"
         onClick={onBack}
-        className="mb-6 text-xs tracking-[0.3em] text-white/40 uppercase hover:text-white transition"
+        className="mb-6 py-2 text-xs tracking-[0.3em] text-white/40 uppercase hover:text-white transition"
       >
         ← Back
       </button>

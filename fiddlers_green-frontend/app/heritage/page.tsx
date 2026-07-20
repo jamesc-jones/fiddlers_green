@@ -11,7 +11,7 @@ export default function HeritagePage() {
     <main className="min-h-screen">
       <HeritageHero />
       <HeritageDivider />
-      <ChapterSection label="I — The Belt">
+      <ChapterSection label="I — The Belt" className="max-w-6xl">
         <TwoRowWampum />
       </ChapterSection>
       <HeritageDivider />
@@ -19,7 +19,7 @@ export default function HeritagePage() {
         <CovenantChain />
       </ChapterSection>
       <HeritageDivider />
-      <ChapterSection label="III — The Land">
+      <ChapterSection label="III — The Land" className="max-w-6xl">
         <TyendinagaHistory />
       </ChapterSection>
       <HeritageDivider />

@@ -12,6 +12,7 @@ export default function ProductCard({ product }: { product: Product }) {
           "group-hover:scale-[1.03] group-hover:shadow-[0_0_32px_rgba(201,168,76,0.25)]",
         ].join(" ")}
       >
+        {/* unoptimized: current images are placeholder SVGs; remove once Phase 11 swaps in real photography */}
         <Image
           src={product.image}
           alt={product.name}

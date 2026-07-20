@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { motion } from "framer-motion";
+import { motion, useReducedMotion } from "framer-motion";
 
 // ─── Animation variants ───────────────────────────────────────────────────────
 // Defined outside the component so they're not recreated on every render.
@@ -24,6 +24,8 @@ const backgroundFade = {
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function Hero() {
+  const shouldReduceMotion = useReducedMotion();
+
   return (
     <section className="relative min-h-screen overflow-hidden flex items-center">
       {/* ── Layer 1: Background ─────────────────────────────────────────────── */}
@@ -46,8 +48,16 @@ export default function Hero() {
             "linear-gradient(120deg, rgba(56,189,148,0.4) 0%, rgba(16,90,90,0.2) 25%, rgba(80,60,140,0.25) 50%, rgba(56,189,148,0.4) 75%, rgba(16,90,90,0.2) 100%)",
           backgroundSize: "200% 200%",
         }}
-        animate={{ backgroundPosition: ["0% 50%", "100% 50%", "0% 50%"] }}
-        transition={{ duration: 15, repeat: Infinity, ease: "easeInOut" }}
+        animate={
+          shouldReduceMotion
+            ? undefined
+            : { backgroundPosition: ["0% 50%", "100% 50%", "0% 50%"] }
+        }
+        transition={
+          shouldReduceMotion
+            ? undefined
+            : { duration: 15, repeat: Infinity, ease: "easeInOut" }
+        }
       />
 
       {/* ── Layer 2: Overlay ────────────────────────────────────────────────── */}

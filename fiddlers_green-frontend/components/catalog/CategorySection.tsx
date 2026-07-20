@@ -29,7 +29,7 @@ export default function CategorySection({ category }: { category: Category }) {
           <h2 className="font-display italic text-4xl md:text-5xl text-brand-cream">
             {category.label}
           </h2>
-          <p className="mt-4 font-body text-base text-white/60 leading-relaxed">
+          <p className="mt-4 font-body text-base md:text-lg text-white/60 leading-relaxed">
             {category.description}
           </p>
         </div>
