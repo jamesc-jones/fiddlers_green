@@ -23,15 +23,28 @@ const backgroundFade = {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export default function Hero() {
+export default function Hero({ skipEntrance = false }: { skipEntrance?: boolean }) {
   const shouldReduceMotion = useReducedMotion();
+  // When the cinematic intro has handled (or is handling) the reveal, Hero must
+  // render already-settled rather than replaying its own fade-up entrance.
+  //
+  // Note: this intentionally does NOT also gate on shouldReduceMotion. Doing
+  // so causes an SSR/hydration mismatch — useReducedMotion() resolves
+  // synchronously on the client's first render (matching the OS preference
+  // immediately) but the server always renders as motion-enabled, so the two
+  // disagree on initial styles. Hero's own content entrance not respecting
+  // reduced motion is a pre-existing gap (only its northern-lights layer
+  // does); fixing it properly needs the same "resolve before paint, client
+  // side only" pattern HomeClient uses for the intro, which is out of scope
+  // here.
+  const entranceInitial = skipEntrance ? false : "hidden";
 
   return (
     <section className="relative min-h-screen overflow-hidden flex items-center">
       {/* ── Layer 1: Background ─────────────────────────────────────────────── */}
       <motion.div
         variants={backgroundFade}
-        initial="hidden"
+        initial={entranceInitial}
         animate="visible"
         className={[
           "absolute inset-0",
@@ -71,7 +84,7 @@ export default function Hero() {
         <motion.p
           variants={fadeUp}
           custom={0.3}
-          initial="hidden"
+          initial={entranceInitial}
           animate="visible"
           className="font-body text-xs md:text-sm tracking-[0.3em] text-brand-gold uppercase"
         >
@@ -81,7 +94,7 @@ export default function Hero() {
         <motion.h1
           variants={fadeUp}
           custom={0.55}
-          initial="hidden"
+          initial={entranceInitial}
           animate="visible"
           className="mt-6 font-display italic text-4xl sm:text-5xl md:text-7xl leading-tight text-brand-cream"
         >
@@ -93,7 +106,7 @@ export default function Hero() {
         <motion.p
           variants={fadeUp}
           custom={0.8}
-          initial="hidden"
+          initial={entranceInitial}
           animate="visible"
           className="mt-6 font-body text-base md:text-lg text-white/60 max-w-xl mx-auto leading-relaxed"
         >
@@ -104,7 +117,7 @@ export default function Hero() {
         <motion.div
           variants={fadeUp}
           custom={1.05}
-          initial="hidden"
+          initial={entranceInitial}
           animate="visible"
           className="mt-10"
         >
