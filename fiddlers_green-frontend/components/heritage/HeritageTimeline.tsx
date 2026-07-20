@@ -44,7 +44,13 @@ export default function HeritageTimeline() {
             transition={{ duration: 0.6, delay: index * 0.1 }}
             className="relative"
           >
-            <span className="absolute -left-8 md:-left-10 top-1 h-2 w-2 rounded-full bg-brand-gold" />
+            <motion.span
+              initial={{ scale: 1, opacity: 0.7 }}
+              whileInView={{ scale: [1, 1.3, 1], opacity: [0.7, 1, 1] }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.6, delay: index * 0.1 + 0.3, ease: "easeOut" }}
+              className="absolute -left-8 md:-left-10 top-1 h-2 w-2 rounded-full bg-brand-gold"
+            />
             <p className="font-display text-xl md:text-2xl text-brand-gold">
               {item.year}
             </p>

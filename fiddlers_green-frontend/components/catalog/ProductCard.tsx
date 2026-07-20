@@ -1,5 +1,6 @@
 import Image from "next/image";
 import type { Product } from "@/data/products";
+import CategoryEffect from "@/components/catalog/CategoryEffect";
 
 export default function ProductCard({ product }: { product: Product }) {
   return (
@@ -19,6 +20,7 @@ export default function ProductCard({ product }: { product: Product }) {
           sizes="(min-width: 1024px) 25vw, (min-width: 640px) 33vw, 50vw"
           className="object-cover transition-[filter] duration-500 ease-out group-hover:brightness-110"
         />
+        <CategoryEffect category={product.category} />
       </div>
 
       <div className="mt-4">

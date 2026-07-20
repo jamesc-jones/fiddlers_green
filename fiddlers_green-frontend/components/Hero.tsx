@@ -37,6 +37,19 @@ export default function Hero() {
         ].join(" ")}
       />
 
+      {/* ── Layer 1.5: Northern lights (atmospheric, no canvas) ────────────── */}
+      <motion.div
+        aria-hidden="true"
+        className="absolute inset-0 opacity-[0.12] mix-blend-screen"
+        style={{
+          backgroundImage:
+            "linear-gradient(120deg, rgba(56,189,148,0.4) 0%, rgba(16,90,90,0.2) 25%, rgba(80,60,140,0.25) 50%, rgba(56,189,148,0.4) 75%, rgba(16,90,90,0.2) 100%)",
+          backgroundSize: "200% 200%",
+        }}
+        animate={{ backgroundPosition: ["0% 50%", "100% 50%", "0% 50%"] }}
+        transition={{ duration: 15, repeat: Infinity, ease: "easeInOut" }}
+      />
+
       {/* ── Layer 2: Overlay ────────────────────────────────────────────────── */}
       <div
         className="absolute inset-0 bg-gradient-to-b from-black/20 via-black/40 to-black/85"

@@ -1,3 +1,7 @@
+"use client";
+
+import { motion } from "framer-motion";
+
 export default function CovenantChain() {
   return (
     <div className="max-w-2xl mx-auto text-center">
@@ -10,10 +14,20 @@ export default function CovenantChain() {
         tightly. It links nations together in an alliance of mutual obligation
         and care.
       </p>
-      <blockquote className="mt-10 border-l-2 border-brand-gold pl-6 text-left font-display text-xl md:text-2xl italic text-brand-gold">
+      <motion.blockquote
+        animate={{
+          boxShadow: [
+            "0 0 0px rgba(201,168,76,0)",
+            "-8px 0 20px rgba(201,168,76,0.18)",
+            "0 0 0px rgba(201,168,76,0)",
+          ],
+        }}
+        transition={{ duration: 7, repeat: Infinity, ease: "easeInOut" }}
+        className="mt-10 border-l-2 border-brand-gold pl-6 text-left font-display text-xl md:text-2xl italic text-brand-gold"
+      >
         &ldquo;As long as the grass is green, as long as the water flows
         downhill, as long as the sun rises in the east.&rdquo;
-      </blockquote>
+      </motion.blockquote>
     </div>
   );
 }

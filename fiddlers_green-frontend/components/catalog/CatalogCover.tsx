@@ -36,7 +36,7 @@ export default function CatalogCover({
               <li key={category.id}>
                 <LinkComponent
                   href={href}
-                  className="font-body text-sm tracking-[0.15em] uppercase text-white/50 hover:text-brand-gold transition-colors duration-200"
+                  className="font-body text-sm tracking-[0.15em] uppercase text-white/50 hover:text-brand-gold transition-[color,text-shadow] duration-300 ease-out hover:[text-shadow:0_0_12px_rgba(201,168,76,0.4)]"
                 >
                   {category.label}
                 </LinkComponent>
