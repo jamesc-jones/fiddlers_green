@@ -6,8 +6,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 This is a monorepo with two independent projects, neither of which is wired to the other yet:
 
-- `fiddlers_green-frontend/` — a Next.js (App Router) site. This is where all current work happens.
-- `fiddlers_green-backend/` — currently empty. No backend code, framework, or API exists yet. Don't assume any backend conventions until this is populated.
+- `fiddlers_green-frontend/` — a Next.js (App Router) site.
+- `fiddlers_green-backend/` — a minimal FastAPI backend (Phase 10), providing `/contact` and `/chat` endpoints. See [Phase 10 Completed](#phase-10-completed--backend--ai-assistant) below.
 
 There is no root-level package.json, build system, or workspace tooling tying the two together — treat them as separate projects and `cd` into `fiddlers_green-frontend` for any npm/build/lint command.
 
@@ -44,7 +44,7 @@ Key versions actually installed: Next.js 16.2.10, React 19.2.4. The App Router (
 
 ### Current state
 
-All primary routes are implemented and validated. The project has completed through Phase 9 — Cinematic Intro. The next phase is Phase 10 (optional) — AI Assistant, or Phase 11 — Final Polish & Production Preparation.
+All primary routes are implemented and validated. The project has completed through Phase 10 — Backend & AI Assistant. The next phase is Phase 11 — Final Polish & Production Preparation.
 
 **Route status:**
 - `/` — Hero section (Phase 3) plus a skippable cinematic intro sequence on first visit per session (Phase 9)
@@ -53,7 +53,8 @@ All primary routes are implemented and validated. The project has completed thro
 - `/catalog/gummies/[strength]` — Stubbed strength detail page (to be expanded)
 - `/catalog/[category]` — Stubbed dynamic category route (to be expanded)
 - `/heritage` — Full cultural storytelling page with timeline (Phase 6)
-- `/contact` — Still a placeholder stub
+- `/contact` — Working contact form, posts to the backend `/contact` endpoint (Phase 10)
+- `/chat` — AI Budtender chat widget, posts to the backend `/chat` endpoint (Phase 10)
 
 **Component directories in use:**
 - `components/Navbar/` — Shared persistent navigation
@@ -63,11 +64,14 @@ All primary routes are implemented and validated. The project has completed thro
 - `components/catalog/` — CatalogCover, CategorySection, ProductCard, TableOfContents, CategoryEffect
 - `components/catalog/gummies/` — GummiesHero, GummiesEntrySelector, StrengthSelector, EntryOptionCard, StrengthButton
 - `components/heritage/` — HeritageHero, ChapterSection, TwoRowWampum, CovenantChain, TyendinagaHistory, HeritageTimeline, HeritageDivider
+- `components/contact/ContactForm.tsx` — Contact form, posts to backend `/contact` (Phase 10)
+- `components/chat/ChatWidget.tsx` — AI Budtender chat UI, posts to backend `/chat` (Phase 10)
 
 **Data layer:**
 - `data/products.ts` — Static typed catalog data (CATEGORIES array, Product and Category types)
 - `data/strengths.ts` — Gummy strength options (STRENGTHS const, Strength type)
 - `data/entryOptions.ts` — Gummy entry options (ENTRY_OPTIONS const, EntryOptionId type)
+- `lib/api.ts` — generic `postJson` helper against `NEXT_PUBLIC_BACKEND_URL` (Phase 10)
 
 ## Phase 2 Completed — Layout & Navbar Foundation
 
@@ -354,21 +358,53 @@ The root overlay's exit fade was originally built on Framer Motion's imperative 
 
 ---
 
-## Development Roadmap
+## Phase 10 Completed — Backend & AI Assistant
 
-### Phase 10 — AI Assistant (Optional)
+### Backend
 
-**Status: FUTURE — OPTIONAL**
+- FastAPI backend created in `fiddlers_green-backend/`:
+  - `main.py` — app init, CORS (localhost:3000 + `FRONTEND_URL`), router registration, `/health`
+  - `routes/contact.py`, `routes/chat.py`
+  - `services/email_service.py`, `services/ai_service.py`
+  - `models/contact.py`, `models/chat.py` — Pydantic schemas only, no business logic
+- Minimal, production-safe architecture: no authentication, no database, no sessions, no streaming, no background jobs, no logging framework (plain `print()` on failure only).
 
-Purpose: interactive Budtender experience — product guidance, strain education, FAQ, personalized recommendations.
+### Contact System
 
-Key considerations before starting:
-- API design and rate limiting strategy.
-- Safety and compliance requirements (cannabis context).
-- UX placement (floating widget vs. dedicated page vs. inline).
-- Whether this belongs before or after launch.
+- `POST /contact` — Pydantic-validated (`ContactRequest`/`ContactResponse`), calls the email service.
+- `services/email_service.py` — sync `smtplib` sender wrapped in `asyncio.to_thread` so it doesn't block the event loop; returns `True`/`False`, no retry logic.
+- Failure returns HTTP 502 with a plain detail message.
+
+### AI Budtender
+
+- `POST /chat` — validates the message is non-empty, calls the AI service, returns `{ reply }`.
+- `services/ai_service.py` — `AsyncAnthropic` client, fixed system prompt, model `claude-haiku-4-5-20251001`, `max_tokens: 512`. Stateless request/response: no conversation history, no tools, no persistence.
+- **Bug fixed during validation**: the Anthropic client was constructed at module import time via `os.getenv("ANTHROPIC_API_KEY")`, but `main.py` imported `routes` (and therefore `ai_service`) *before* calling `load_dotenv()`, so the key was always `None` and every request failed with "Could not resolve authentication method." Fixed by calling `load_dotenv()` directly inside `ai_service.py`, before the client is constructed — scoped entirely to that file.
+
+### Frontend Integration
+
+- `lib/api.ts` — generic `postJson` helper against `NEXT_PUBLIC_BACKEND_URL`.
+- `components/contact/ContactForm.tsx` — name/email/message/inquiry_type fields, idle/loading/success/error states, wired into `app/contact/page.tsx`.
+- `components/chat/ChatWidget.tsx` — user/assistant message list, input, send button, loading state. No streaming, no persistence.
+- `app/chat/page.tsx` — renders `ChatWidget`.
+- `components/Navbar/index.tsx` — added a `Chat` link to `NAV_LINKS`.
+
+### Validation completed
+
+- `npm run lint` — no errors.
+- `npx tsc --noEmit` — no type errors.
+- `npm run build` — production build clean, all 9 routes generated (`/chat` added).
+- `/health`, `/contact`, and `/chat` tested via `curl` (success and validation-error paths).
+- Contact form and chat widget tested end-to-end in a browser.
+- `/chat` verified with a real Anthropic API key — valid, contextually appropriate replies returned, no backend errors.
+
+### Known notes
+
+- `ANTHROPIC_API_KEY` and SMTP credentials are supplied only via `fiddlers_green-backend/.env` (git-ignored) — never committed. `.env.example` files exist for both frontend and backend as a template.
 
 ---
+
+## Development Roadmap
 
 ### Phase 11 — Final Polish & Production Preparation
 
