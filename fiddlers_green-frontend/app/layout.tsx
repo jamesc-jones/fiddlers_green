@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Cormorant_Garamond, Inter } from "next/font/google";
 import Navbar from "@/components/Navbar";
+import Footer from "@/components/Footer";
 import "./globals.css";
 
 // ─── Fonts ────────────────────────────────────────────────────────────────────
@@ -41,8 +42,14 @@ export const metadata: Metadata = {
     title: "Fiddler's Green | Premium Indigenous Cannabis",
     description:
       "Premium cannabis, made in Tyendinaga. By Indigenous, for the world.",
-    // Uncomment and add your image when ready:
-    // images: [{ url: "/og-image.jpg", width: 1200, height: 630, alt: "Fiddler's Green" }],
+    images: [
+      {
+        url: "/og-image.png",
+        width: 1200,
+        height: 630,
+        alt: "Fiddler's Green",
+      },
+    ],
   },
   twitter: {
     card: "summary_large_image",
@@ -73,7 +80,7 @@ export default function RootLayout({
         <main className="flex-1 pt-16 md:pt-20">
           {children}
         </main>
-        {/* Footer — added in a later phase */}
+        <Footer />
       </body>
     </html>
   );

@@ -360,89 +360,84 @@ The root overlay's exit fade was originally built on Framer Motion's imperative 
 
 ## Phase 10 Completed — Backend & AI Assistant
 
-### Backend
+### Implementation Summary
 
-- FastAPI backend created in `fiddlers_green-backend/`:
-  - `main.py` — app init, CORS (localhost:3000 + `FRONTEND_URL`), router registration, `/health`
-  - `routes/contact.py`, `routes/chat.py`
-  - `services/email_service.py`, `services/ai_service.py`
-  - `models/contact.py`, `models/chat.py` — Pydantic schemas only, no business logic
-- Minimal, production-safe architecture: no authentication, no database, no sessions, no streaming, no background jobs, no logging framework (plain `print()` on failure only).
+FastAPI backend created in `fiddlers_green-backend/` with the following structure:
 
-### Contact System
+```
+fiddlers_green-backend/
+├── main.py                  — app init, CORS, router registration
+├── routes/
+│   ├── contact.py           — POST /contact
+│   └── chat.py              — POST /chat
+├── services/
+│   ├── email_service.py     — SMTP via asyncio.to_thread
+│   └── ai_service.py        — Anthropic Claude integration
+├── models/
+│   ├── contact.py           — ContactRequest / ContactResponse (Pydantic)
+│   └── chat.py              — ChatRequest / ChatResponse (Pydantic)
+├── .env                     — secrets (git-ignored)
+└── .env.example             — template (committed, no secrets)
+```
 
-- `POST /contact` — Pydantic-validated (`ContactRequest`/`ContactResponse`), calls the email service.
-- `services/email_service.py` — sync `smtplib` sender wrapped in `asyncio.to_thread` so it doesn't block the event loop; returns `True`/`False`, no retry logic.
-- Failure returns HTTP 502 with a plain detail message.
+**Endpoints:**
+- `GET /health` — returns `{ "status": "ok" }`, used to confirm the service is running.
+- `POST /contact` — Pydantic-validated body (`name`, `email`, `message`, `inquiry_type`); calls `email_service.py`; returns `{ ok, detail }` or HTTP 502 on delivery failure.
+- `POST /chat` — validates message is non-empty; calls `ai_service.py`; returns `{ reply }` or HTTP 502 on API failure.
 
-### AI Budtender
+**Architecture constraints honored:** no authentication, no database, no sessions, no streaming, no background jobs, no logging framework. Failures surface as HTTP error responses with plain detail messages only.
 
-- `POST /chat` — validates the message is non-empty, calls the AI service, returns `{ reply }`.
-- `services/ai_service.py` — `AsyncAnthropic` client, fixed system prompt, model `claude-haiku-4-5-20251001`, `max_tokens: 512`. Stateless request/response: no conversation history, no tools, no persistence.
-- **Bug fixed during validation**: the Anthropic client was constructed at module import time via `os.getenv("ANTHROPIC_API_KEY")`, but `main.py` imported `routes` (and therefore `ai_service`) *before* calling `load_dotenv()`, so the key was always `None` and every request failed with "Could not resolve authentication method." Fixed by calling `load_dotenv()` directly inside `ai_service.py`, before the client is constructed — scoped entirely to that file.
+**Bug fixed during validation:** the Anthropic client was constructed at module import time before `load_dotenv()` was called, so `ANTHROPIC_API_KEY` was always `None`. Fixed by calling `load_dotenv()` at the top of `ai_service.py` before the client is constructed.
 
 ### Frontend Integration
 
-- `lib/api.ts` — generic `postJson` helper against `NEXT_PUBLIC_BACKEND_URL`.
-- `components/contact/ContactForm.tsx` — name/email/message/inquiry_type fields, idle/loading/success/error states, wired into `app/contact/page.tsx`.
-- `components/chat/ChatWidget.tsx` — user/assistant message list, input, send button, loading state. No streaming, no persistence.
-- `app/chat/page.tsx` — renders `ChatWidget`.
-- `components/Navbar/index.tsx` — added a `Chat` link to `NAV_LINKS`.
+- `lib/api.ts` — generic `postJson` helper reads `NEXT_PUBLIC_BACKEND_URL` and handles error propagation for all backend calls.
+- `components/contact/ContactForm.tsx` — `name`, `email`, `message`, `inquiry_type` fields; idle / loading / success / error states; wired into `app/contact/page.tsx`.
+- `components/chat/ChatWidget.tsx` — user/assistant message list, input, send button, loading indicator. No streaming, no message persistence.
+- `app/chat/page.tsx` — dedicated route rendering `ChatWidget`.
+- `components/Navbar/index.tsx` — `Chat` link added to `NAV_LINKS`.
 
-### Validation completed
+### AI Assistant Behavior
+
+- Model: `claude-haiku-4-5-20251001`, `max_tokens: 512`. Stateless: each request is independent with no conversation history.
+- System prompt establishes the budtender persona: calm, knowledgeable, premium in tone — not promotional or gimmicky.
+- Hard limits enforced via system prompt: no medical or health claims, no dosage recommendations, no invented product details, no competitor discussion.
+- Product catalog (all three categories, all eleven products, Haney Pot strength range) is included in the system prompt so replies are grounded in real catalog data.
+- Wholesale and business inquiries are redirected to the contact form.
+- If the assistant does not know a specific fact, it says so rather than hallucinating.
+
+### Validation Completed
 
 - `npm run lint` — no errors.
 - `npx tsc --noEmit` — no type errors.
 - `npm run build` — production build clean, all 9 routes generated (`/chat` added).
-- `/health`, `/contact`, and `/chat` tested via `curl` (success and validation-error paths).
-- Contact form and chat widget tested end-to-end in a browser.
-- `/chat` verified with a real Anthropic API key — valid, contextually appropriate replies returned, no backend errors.
+- `/health` returns `{ "status": "ok" }` — confirmed via `curl`.
+- `/contact` tested via `curl` — success path and validation-error path both correct.
+- `/chat` tested via `curl` — correct response shape returned.
+- `/chat` verified with a live Anthropic API key — contextually appropriate, catalog-accurate replies returned with no backend errors.
+- Contact form and chat widget tested end-to-end in a browser against the running backend.
 
-### Known notes
+### Security & Repo Hygiene
 
-- `ANTHROPIC_API_KEY` and SMTP credentials are supplied only via `fiddlers_green-backend/.env` (git-ignored) — never committed. `.env.example` files exist for both frontend and backend as a template.
+- `fiddlers_green-backend/.env` is git-ignored — API keys and SMTP credentials are never committed.
+- `.env.example` files exist for both frontend and backend as templates with no secrets.
+- `node_modules/` excluded via `.gitignore`.
+- `.idea/` and editor metadata excluded via `.gitignore`.
+- Repository is clean and production-safe.
+
+### Git Milestone
+
+Phase 10 committed and pushed. Repository is in a clean, deployable state.
 
 ---
 
-## Development Roadmap
+Phase 10 is complete. The project is now a fully functional full-stack application with an integrated AI assistant.
 
-### Phase 11 — Final Polish & Production Preparation
+---
 
-**Status: REQUIRED BEFORE DEPLOYMENT**
+## Phase 11 — Final Production Polish & QA
 
-Purpose: move from polished prototype → production-ready website.
-
-**Checklist:**
-
-Visual:
-- Brand consistency across every page and state.
-- No placeholder content, stub sections, or unfinished copy.
-- Final product photography replacing SVG placeholders in `data/products.ts`.
-
-Responsive:
-- Full end-to-end validation: 390px (iPhone SE), 768px (iPad), 1440px (desktop).
-- Test on real devices, not only emulators.
-
-Performance:
-- Lighthouse audit (target: Performance ≥ 90, Accessibility ≥ 90).
-- Bundle size review (`next build` output analysis).
-- All images through `next/image` with correct `sizes`, `priority`, and formats.
-- Animation jank check on low-end mobile (throttled CPU).
-
-Accessibility:
-- Keyboard navigation through every interactive element.
-- Color contrast ratios ≥ 4.5:1 for all body text.
-- `prefers-reduced-motion` respected everywhere.
-- All images have meaningful `alt` text.
-- Semantic HTML audit (`main`, `nav`, `section`, `article`, `h1`→`h6` hierarchy).
-
-Deployment preparation:
-- `NEXT_PUBLIC_SITE_URL` environment variable set in Vercel.
-- `metadataBase` resolving correctly in production.
-- Open Graph image (`/og-image.jpg`, 1200×630) created and wired into `layout.tsx`.
-- Favicon and `apple-touch-icon` assets in `public/`.
-- Analytics configured if required.
-- Error monitoring configured (Sentry or equivalent) if required.
+**Status: NOT STARTED**
 
 ---
 

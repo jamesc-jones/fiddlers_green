@@ -20,7 +20,7 @@ export default function ContactForm() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [message, setMessage] = useState("");
-  const [inquiryType, setInquiryType] = useState("");
+  const [inquiryType, setInquiryType] = useState("general");
   const [status, setStatus] = useState<Status>("idle");
   const [detail, setDetail] = useState("");
 
@@ -33,7 +33,7 @@ export default function ContactForm() {
         name,
         email,
         message,
-        inquiry_type: inquiryType || undefined,
+        inquiry_type: inquiryType,
       });
       setDetail(response.detail);
       setStatus("success");
@@ -87,15 +87,17 @@ export default function ContactForm() {
 
       <div>
         <label htmlFor="inquiry_type" className={labelClasses}>
-          Inquiry Type <span className="normal-case text-white/40">(optional)</span>
+          Inquiry Type
         </label>
-        <input
+        <select
           id="inquiry_type"
-          type="text"
           value={inquiryType}
           onChange={(event) => setInquiryType(event.target.value)}
-          className={inputClasses}
-        />
+          className={`${inputClasses} bg-black`}
+        >
+          <option value="general">General</option>
+          <option value="wholesale">Wholesale</option>
+        </select>
       </div>
 
       <div>

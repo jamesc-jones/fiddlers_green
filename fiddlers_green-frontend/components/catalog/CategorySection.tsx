@@ -35,8 +35,8 @@ export default function CategorySection({ category }: { category: Category }) {
         </div>
 
         <div className="mt-12 md:mt-16 grid grid-cols-2 lg:grid-cols-4 gap-x-6 gap-y-12 md:gap-x-8 md:gap-y-16">
-          {category.products.map((product) => (
-            <ProductCard key={product.id} product={product} />
+          {category.products.map((product, index) => (
+            <ProductCard key={product.id} product={product} priority={index === 0} />
           ))}
         </div>
       </div>

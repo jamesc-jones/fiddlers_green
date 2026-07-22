@@ -1,7 +1,13 @@
 "use client";
 
+import { useEffect, useLayoutEffect, useState } from "react";
 import Link from "next/link";
 import { motion, useReducedMotion } from "framer-motion";
+
+// Avoids the "useLayoutEffect does nothing on the server" warning during
+// static generation, while still running before paint on the client.
+const useIsomorphicLayoutEffect =
+  typeof window !== "undefined" ? useLayoutEffect : useEffect;
 
 // ─── Animation variants ───────────────────────────────────────────────────────
 // Defined outside the component so they're not recreated on every render.
@@ -25,19 +31,26 @@ const backgroundFade = {
 
 export default function Hero({ skipEntrance = false }: { skipEntrance?: boolean }) {
   const shouldReduceMotion = useReducedMotion();
+
+  // framer-motion's useReducedMotion() reads the media query synchronously
+  // during render, which resolves to the real OS value on the client's very
+  // first render but always resolves to `false` during SSR — branching the
+  // entrance variant directly on it would disagree with the server-rendered
+  // markup. Instead, mirror HomeClient's proven pattern: start in agreement
+  // with the server (`false`), then flip in a layout effect, which commits
+  // before the browser paints so there's no visible flash either way.
+  const [reducedMotionResolved, setReducedMotionResolved] = useState(false);
+
+  useIsomorphicLayoutEffect(() => {
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      setReducedMotionResolved(true);
+    }
+  }, []);
+
   // When the cinematic intro has handled (or is handling) the reveal, Hero must
   // render already-settled rather than replaying its own fade-up entrance.
-  //
-  // Note: this intentionally does NOT also gate on shouldReduceMotion. Doing
-  // so causes an SSR/hydration mismatch — useReducedMotion() resolves
-  // synchronously on the client's first render (matching the OS preference
-  // immediately) but the server always renders as motion-enabled, so the two
-  // disagree on initial styles. Hero's own content entrance not respecting
-  // reduced motion is a pre-existing gap (only its northern-lights layer
-  // does); fixing it properly needs the same "resolve before paint, client
-  // side only" pattern HomeClient uses for the intro, which is out of scope
-  // here.
-  const entranceInitial = skipEntrance ? false : "hidden";
+  // Reduced motion is treated the same way: settled immediately, no entrance.
+  const entranceInitial = skipEntrance || reducedMotionResolved ? false : "hidden";
 
   return (
     <section className="relative min-h-screen overflow-hidden flex items-center">

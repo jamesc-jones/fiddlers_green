@@ -2,7 +2,13 @@ import Image from "next/image";
 import type { Product } from "@/data/products";
 import CategoryEffect from "@/components/catalog/CategoryEffect";
 
-export default function ProductCard({ product }: { product: Product }) {
+export default function ProductCard({
+  product,
+  priority = false,
+}: {
+  product: Product;
+  priority?: boolean;
+}) {
   return (
     <div className="group flex flex-col">
       <div
@@ -12,12 +18,11 @@ export default function ProductCard({ product }: { product: Product }) {
           "group-hover:scale-[1.03] group-hover:shadow-[0_0_32px_rgba(201,168,76,0.25)]",
         ].join(" ")}
       >
-        {/* unoptimized: current images are placeholder SVGs; remove once Phase 11 swaps in real photography */}
         <Image
           src={product.image}
           alt={product.name}
           fill
-          unoptimized
+          priority={priority}
           sizes="(min-width: 1024px) 25vw, (min-width: 640px) 33vw, 50vw"
           className="object-cover transition-[filter] duration-500 ease-out group-hover:brightness-110"
         />
