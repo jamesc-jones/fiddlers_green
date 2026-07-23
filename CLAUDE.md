@@ -44,7 +44,7 @@ Key versions actually installed: Next.js 16.2.10, React 19.2.4. The App Router (
 
 ### Current state
 
-All primary routes are implemented and validated. Phases 1-12 are complete; the current completed milestone is Phase 12 — Chat Widget. The next phase is Phase 13 — Final Production Polish & QA (Deployment Readiness).
+All primary routes are implemented and validated. Phases 1-13 are complete; the current completed milestone is Phase 13 — Final Production Polish & QA (Deployment Readiness). The next phase is Phase 14 — VPS Deployment with NGINX + Domain + SSL.
 
 **Route status:**
 - `/` — Hero section (Phase 3) plus a skippable cinematic intro sequence on first visit per session (Phase 9)
@@ -485,9 +485,34 @@ Phase 10 is complete. The project is now a fully functional full-stack applicati
 
 ---
 
-## Phase 13 — Final Production Polish & QA (Deployment Readiness)
+## Phase 13 Completed — Final Production Polish & QA (Deployment Readiness)
 
-**Status: NOT STARTED**
+### What was fixed
+- **HTML structure (Section 3):** Removed nested `<main>` elements from all 5 affected route `page.tsx` files — `/catalog`, `/catalog/gummies`, `/heritage`, `/contact`, `/chat` (outer wrapper changed to `<div>`, all Tailwind classes preserved exactly, no visual change). The single `<main>` in `app/layout.tsx` remains the correct landmark.
+- **Per-route metadata (Section 3):** Added `metadata` exports to the four public content routes (`/catalog`, `/heritage`, `/contact`, `/chat`).
+- **`robots.txt` & sitemap (Section 3):** Created `public/robots.txt` (with a `PRODUCTION_DOMAIN` placeholder, not an invented domain) and `app/sitemap.ts` (generates all 6 public routes; excludes redirect stubs).
+- **`next.config.ts` (Section 3):** Added `poweredByHeader: false`.
+- **Accessibility (Section 4):** Added an ESC-key handler to `Navbar`'s mobile menu, mirroring `FloatingChat`'s existing pattern. The hamburger button's `aria-label`/`aria-expanded`/`aria-controls` were already present from earlier work, so no change was needed there.
+- **Backend: FastAPI docs (Section 6):** `/docs` and `/redoc` now conditionally disabled via a `DISABLE_DOCS` environment variable; defaults to enabled (current local-dev behavior unchanged) unless explicitly set `true`.
+- **Backend: `inquiry_type` validation (Section 6):** Changed `Optional[str] = None` to `Optional[Literal["general", "wholesale"]] = "general"` in `ContactRequest` — the only file touched for this fix, per the plan's explicit scope constraint.
+- **Configuration (Section 2):** Both `.env.example` files fully commented; `NEXT_PUBLIC_SITE_URL` added to frontend; `DISABLE_DOCS` added to backend. Discovered and fixed that `fiddlers_green-frontend/.env.example` had never actually been committed to git — an overly broad `.env*` rule in the frontend `.gitignore` had silently blocked it since Phase 10 despite being documented as committed. Added `.env.local.example` as the Docker-facing template and the necessary `.gitignore` negations (`!.env.example`, `!.env.local.example`).
+
+### Sections that required no code changes (audit-only)
+- **Section 1 — Repository health:** confirmed clean tree, `main` branch, and CLAUDE.md accuracy. The empty `sections/` placeholder turned out to have never been tracked by git at all (Git doesn't track empty directories), so removing it from disk produced no commit.
+- **Section 5 — Performance:** confirmed no `unoptimized` flag in `next.config.ts`; `CategoryEffect`'s and `ChatButton`'s looping animations correctly gate on `useReducedMotion()`/open-state; fonts use `display: "swap"`; `FloatingChat` is genuinely split into its own dynamic chunk (confirmed via a distinctive-string search in the built bundle, not just configuration inspection). No changes needed.
+- **Section 7 — Responsive QA:** audited all 7 named components (plus `IntroSequence`'s 4 sub-components) against the four required viewports via code review. No confirmed bugs. Two observations documented rather than fixed — see known limitations below.
+
+### Known limitations carried forward
+- Hero's own content entrance (`fadeUp` variants on eyebrow, headline, body, CTA) still does not respect `prefers-reduced-motion` — a pre-existing gap from Phase 9 (only Hero's northern-lights background layer guards on it). Deliberately not touched here: the fix risks reintroducing the SSR/hydration mismatch that was specifically ruled out in Phase 11.
+- Catalog's product grid (`CategorySection.tsx`) intentionally uses 2 columns even at 390px — a deliberate Phase 4 design choice, not a defect; flagged during the Section 7 audit only because the plan's own illustrative example assumed single-column mobile layouts.
+- `HeritageTimeline`'s entrance animation wrapper has no explicit `overflow-hidden` safeguard. Risk is low given the small (-16px) offset, but not conclusively ruled out without live-browser verification — flagged for manual QA, not treated as fixed.
+
+### Validation completed
+- `npm run lint` — no errors. `npx tsc --noEmit` — no errors (run after every individual file edit throughout, not just at section boundaries). `npm run build` — clean, all 10 routes generated including `/sitemap.xml`; stub routes (`/catalog/[category]`, `/catalog/gummies/[strength]`) correctly render as dynamic redirects, not 404s.
+- `docker compose up --build -d` — both containers reported `Up (healthy)`; `GET /health` → `{"status":"ok"}`; `GET /` → 200.
+- Security: `GET /docs` → 200 (correct for local dev, since `DISABLE_DOCS` is unset); `POST /contact` with `inquiry_type: "invalid"` → 422.
+- Accessibility: not freshly re-verified live in this final pass — browser automation tooling became unavailable partway through Section 4 and did not reconnect. Relying instead on prior verified behavior: `FloatingChat`'s full open/close/focus-management/ESC cycle was live-tested via Playwright during both Phase 12 and the Section 4 investigation; Navbar's new ESC handler was confirmed correct at the compiled-bundle level once a stale Docker container (the actual cause of an earlier apparent test failure, not a real code defect) was identified and removed.
+- `git status` clean throughout every section; no `.env` files with real values were ever staged or committed.
 
 ---
 
