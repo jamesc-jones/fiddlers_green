@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import ChapterSection from "@/components/heritage/ChapterSection";
 import CovenantChain from "@/components/heritage/CovenantChain";
 import HeritageDivider from "@/components/heritage/HeritageDivider";
@@ -6,9 +7,15 @@ import HeritageTimeline from "@/components/heritage/HeritageTimeline";
 import TwoRowWampum from "@/components/heritage/TwoRowWampum";
 import TyendinagaHistory from "@/components/heritage/TyendinagaHistory";
 
+export const metadata: Metadata = {
+  title: "Heritage",
+  description:
+    "The story of Fiddler's Green — rooted in Tyendinaga, the Two Row Wampum, and the Haudenosaunee Covenant Chain.",
+};
+
 export default function HeritagePage() {
   return (
-    <main className="min-h-screen">
+    <div className="min-h-screen">
       <HeritageHero />
       <HeritageDivider />
       <ChapterSection label="I — The Belt" className="max-w-6xl">
@@ -26,6 +33,6 @@ export default function HeritagePage() {
       <ChapterSection label="IV — The Timeline">
         <HeritageTimeline />
       </ChapterSection>
-    </main>
+    </div>
   );
 }

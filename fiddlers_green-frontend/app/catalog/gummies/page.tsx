@@ -31,7 +31,7 @@ export default function GummiesPage() {
   }
 
   return (
-    <main className="min-h-screen flex flex-col items-center justify-center px-6">
+    <div className="min-h-screen flex flex-col items-center justify-center px-6">
       <GummiesHero />
 
       <AnimatePresence mode="wait">
@@ -68,6 +68,6 @@ export default function GummiesPage() {
           </motion.div>
         )}
       </AnimatePresence>
-    </main>
+    </div>
   );
 }

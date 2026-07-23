@@ -1,0 +1,5 @@
+User-agent: *
+Allow: /
+
+# PRODUCTION_DOMAIN must be set before Phase 14 (VPS deployment).
+Sitemap: https://PRODUCTION_DOMAIN/sitemap.xml
