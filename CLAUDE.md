@@ -66,12 +66,15 @@ All primary routes are implemented and validated. Phases 1-12 are complete; the 
 - `components/heritage/` — HeritageHero, ChapterSection, TwoRowWampum, CovenantChain, TyendinagaHistory, HeritageTimeline, HeritageDivider
 - `components/contact/ContactForm.tsx` — Contact form, posts to backend `/contact` (Phase 10)
 - `components/chat/ChatWidget.tsx` — AI Budtender chat UI, posts to backend `/chat` (Phase 10)
+- `components/Footer.tsx` — Minimal branded footer, mounted in root layout (Phase 11)
+- `components/FloatingChat/` — Persistent floating chat widget: `index.tsx` (root orchestrator), `ChatButton.tsx` (FAB), `ChatPanel.tsx` (dialog + FAQ quick-replies), `MessageList.tsx` (auto-scroll), `MessageInput.tsx` (Phase 12)
 
 **Data layer:**
 - `data/products.ts` — Static typed catalog data (CATEGORIES array, Product and Category types)
 - `data/strengths.ts` — Gummy strength options (STRENGTHS const, Strength type)
 - `data/entryOptions.ts` — Gummy entry options (ENTRY_OPTIONS const, EntryOptionId type)
 - `lib/api.ts` — generic `postJson` helper against `NEXT_PUBLIC_BACKEND_URL` (Phase 10)
+- `hooks/useChatMessages.ts` — shared message state and `sendMessage` logic; consumed by both `ChatWidget` and `FloatingChat` (Phase 12)
 
 ## Phase 2 Completed — Layout & Navbar Foundation
 
