@@ -44,7 +44,7 @@ Key versions actually installed: Next.js 16.2.10, React 19.2.4. The App Router (
 
 ### Current state
 
-All primary routes are implemented and validated. The project has completed through Phase 12 — Chat Widget. The next phase is Phase 13 — Deploy & Launch.
+All primary routes are implemented and validated. Phases 1-12 are complete; the current completed milestone is Phase 12 — Chat Widget. The next phase is Phase 13 — Final Production Polish & QA (Deployment Readiness).
 
 **Route status:**
 - `/` — Hero section (Phase 3) plus a skippable cinematic intro sequence on first visit per session (Phase 9)
@@ -482,9 +482,15 @@ Phase 10 is complete. The project is now a fully functional full-stack applicati
 
 ---
 
-## Phase 13 — Deploy & Launch
+## Phase 13 — Final Production Polish & QA (Deployment Readiness)
 
-**Status: FINAL**
+**Status: NOT STARTED**
+
+---
+
+## Phase 14 — VPS Deployment with NGINX + Domain + SSL
+
+**Status: NOT STARTED**
 
 Tasks:
 - Production deployment to Vercel.
