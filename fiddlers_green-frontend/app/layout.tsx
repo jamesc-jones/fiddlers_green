@@ -1,8 +1,16 @@
 import type { Metadata } from "next";
+import dynamic from "next/dynamic";
 import { Cormorant_Garamond, Inter } from "next/font/google";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import "./globals.css";
+
+// `ssr: false` isn't allowed on next/dynamic inside a Server Component (this
+// layout stays server-only by design — see Phase 2 notes), so this omits
+// that option. FloatingChat is already a Client Component ("use client")
+// with all browser-only access gated inside effects, so it's safe to
+// prerender; this still gets it its own separate client chunk.
+const FloatingChat = dynamic(() => import("@/components/FloatingChat"));
 
 // ─── Fonts ────────────────────────────────────────────────────────────────────
 
@@ -81,6 +89,7 @@ export default function RootLayout({
           {children}
         </main>
         <Footer />
+        <FloatingChat />
       </body>
     </html>
   );

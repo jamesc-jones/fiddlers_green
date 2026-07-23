@@ -1,53 +1,19 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
-import { postJson } from "@/lib/api";
-
-interface ChatMessage {
-  role: "user" | "assistant";
-  content: string;
-}
-
-interface ChatResponse {
-  reply: string;
-}
+import { useChatMessages } from "@/hooks/useChatMessages";
 
 export default function ChatWidget() {
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const { messages, loading, sendMessage } = useChatMessages();
   const [input, setInput] = useState("");
-  const [loading, setLoading] = useState(false);
 
   async function handleSend(event: FormEvent) {
     event.preventDefault();
     const trimmed = input.trim();
     if (!trimmed || loading) return;
 
-    setMessages((prev) => [...prev, { role: "user", content: trimmed }]);
     setInput("");
-    setLoading(true);
-
-    try {
-      const response = await postJson<ChatResponse>("/chat", {
-        message: trimmed,
-      });
-      setMessages((prev) => [
-        ...prev,
-        { role: "assistant", content: response.reply },
-      ]);
-    } catch (error) {
-      setMessages((prev) => [
-        ...prev,
-        {
-          role: "assistant",
-          content:
-            error instanceof Error
-              ? error.message
-              : "Sorry, something went wrong. Please try again.",
-        },
-      ]);
-    } finally {
-      setLoading(false);
-    }
+    await sendMessage(trimmed);
   }
 
   return (

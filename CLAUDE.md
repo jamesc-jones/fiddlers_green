@@ -44,7 +44,7 @@ Key versions actually installed: Next.js 16.2.10, React 19.2.4. The App Router (
 
 ### Current state
 
-All primary routes are implemented and validated. The project has completed through Phase 10 — Backend & AI Assistant. The next phase is Phase 11 — Final Polish & Production Preparation.
+All primary routes are implemented and validated. The project has completed through Phase 12 — Chat Widget. The next phase is Phase 13 — Deploy & Launch.
 
 **Route status:**
 - `/` — Hero section (Phase 3) plus a skippable cinematic intro sequence on first visit per session (Phase 9)
@@ -435,13 +435,54 @@ Phase 10 is complete. The project is now a fully functional full-stack applicati
 
 ---
 
-## Phase 11 — Final Production Polish & QA
+## Phase 11 Completed — Final Production Polish & QA
 
-**Status: NOT STARTED**
+### What was built
+- Stub routes now redirect instead of showing placeholder text: `/catalog/[category]` → `/catalog`, `/catalog/gummies/[strength]` → `/catalog/gummies`.
+- Contact form's `inquiry_type` changed from free-text to a validated `<select>` (`general` / `wholesale`), matching backend expectations, with a valid default.
+- `ProductCard.tsx`: removed `unoptimized` from `<Image>` (Next.js already treats local `.svg` sources as unoptimized automatically via the default loader, so behavior is unchanged); added `priority` to the first product per category.
+- Missing assets generated as branded placeholders: `favicon.ico`, `apple-touch-icon.png` (180×180), `og-image.png` (1200×630).
+- `app/layout.tsx` metadata: `openGraph.images` wired to `/og-image.png`; `metadataBase` continues to read `NEXT_PUBLIC_SITE_URL`.
+- Unused default Next.js SVGs (`file.svg`, `globe.svg`, `window.svg`) removed from `public/` after confirming no references.
+- `components/Footer.tsx` added — minimal branded footer, mounted in root layout below `<main>`.
+- Accessibility: chat input `aria-label`; `Hero.tsx` content entrance now respects `prefers-reduced-motion` via an isomorphic-layout-effect pattern mirroring `HomeClient.tsx`'s proven approach (framer-motion's `useReducedMotion()` resolves synchronously on the client's first render but always `false` on the server, so branching JSX on it directly causes an SSR/hydration mismatch — this instead starts in agreement with the server and flips state in a layout effect before first paint).
+
+### Containerization
+- `fiddlers_green-frontend/Dockerfile` (multi-stage Node build) and `fiddlers_green-backend/Dockerfile` (Python/uvicorn), plus a `.dockerignore` for each.
+- `docker-compose.yml` at the repo root wires both services together.
+- `NEXT_PUBLIC_BACKEND_URL` build arg defaults to empty: `lib/api.ts` falls back to `${window.location.protocol}//${window.location.hostname}:8000` in the browser when unset, so one built image keeps working across hosts (e.g. once a real domain is behind Nginx) without a rebuild.
+- Backend healthcheck (`python -c "urllib.request..."`, `timeout=2` — `python:3.11-slim` has no `curl`) and frontend healthcheck (`node -e "fetch(...)"` — `node:20-alpine` has no `curl` either); frontend's `depends_on` gates on backend health.
+
+### Validation completed
+- `npm run lint`, `npx tsc --noEmit`, `npm run build` — all clean.
+- `docker compose up --build` — both containers report `Up (healthy)`; `/health`, `/docs`, and `/` all verified reachable; CORS preflight clean; logs free of errors/warnings.
 
 ---
 
-### Phase 12 — Deploy & Launch
+## Phase 12 — Chat Widget
+
+**Status: COMPLETE**
+
+### What was built
+- `hooks/useChatMessages.ts` — message state (`messages`, `loading`) and `sendMessage`, extracted from the original `ChatWidget.tsx` so the logic is shared rather than duplicated.
+- `components/chat/ChatWidget.tsx` — refactored onto the hook; UI unchanged.
+- `components/FloatingChat/` — a new persistent floating widget: `ChatButton.tsx` (FAB, `z-[60]`, animated chat↔close icon, subtle idle pulse that stops once opened), `MessageInput.tsx`, `MessageList.tsx` (auto-scroll, loading indicator, empty state), `ChatPanel.tsx` (dialog, header, close button, FAQ quick-reply view shown only when there are no messages yet), `index.tsx` (root: open/close state, focus management, ESC-to-close, mobile-only body-scroll lock, hidden on `/chat`, a one-time delayed auto-open on first landing on `/` that never re-triggers once the user manually dismisses it this session).
+- `app/layout.tsx` — mounts `<FloatingChat />` after `<Footer />` via `next/dynamic` (without `ssr: false`, which isn't valid on `next/dynamic` inside this Server Component — see inline comment there).
+
+### Key decisions
+- `FloatingChat` lives in the root layout, so its state (open/closed, message history) persists across client-side navigation, and is only hidden — not unmounted — on `/chat`, which has its own dedicated `ChatWidget`.
+- Focus management uses `forwardRef` threaded down to the actual `<input>` (open → focus input, close → focus returns to the FAB), through every closing path (X button, ESC, and toggling the FAB itself).
+- FAQ quick-replies call the existing `sendMessage()` directly rather than manually appending a message — `sendMessage` already does the optimistic user-message append itself, so a separate append would double it.
+
+### Validation completed
+- `npx tsc --noEmit` clean after every step; `npm run lint` clean; `npm run build` clean.
+- Full live validation against the running Docker stack via browser automation: FAB visible on all routes except `/chat`; open/close, focus management, and ESC all verified; message send/receive verified against both a placeholder and a real `ANTHROPIC_API_KEY` (graceful error path and real reply path both confirmed); messages persist across client-side navigation; mobile body-scroll lock confirmed active at 375px width and correctly inactive at 1280px width.
+- Accessibility: keyboard-only interaction verified (Tab to FAB, Enter submits), `aria-label`/`aria-expanded` on the FAB, `role="dialog"`/`aria-modal`/`aria-label` on the panel, focus-visible rings on all interactive elements, focus moves to the input on open and returns to the FAB on close.
+- FAQ quick-replies (added in the post-completion refinement pass): auto-open behavior and session-dismissal persistence verified across hard reloads; clicking a FAQ button confirmed to produce exactly one user message (no duplicate) and a real backend reply.
+
+---
+
+## Phase 13 — Deploy & Launch
 
 **Status: FINAL**
 
