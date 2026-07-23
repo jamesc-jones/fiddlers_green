@@ -32,6 +32,9 @@ services:
     ports:
       - "3000:3000"
     env_file:
+      # .env.local is gitignored and not committed. Create it locally by
+      # copying fiddlers_green-frontend/.env.local.example and filling in
+      # real values before running `docker compose up`.
       - ./fiddlers_green-frontend/.env.local
     healthcheck:
       test:
