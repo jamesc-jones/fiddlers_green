@@ -8,7 +8,11 @@ from routes import chat, contact
 
 load_dotenv()
 
-app = FastAPI(title="Fiddler's Green API")
+docs_disabled = os.getenv("DISABLE_DOCS", "false").lower() == "true"
+docs_url = None if docs_disabled else "/docs"
+redoc_url = None if docs_disabled else "/redoc"
+
+app = FastAPI(title="Fiddler's Green API", docs_url=docs_url, redoc_url=redoc_url)
 
 allowed_origins = ["http://localhost:3000"]
 frontend_url = os.getenv("FRONTEND_URL")
