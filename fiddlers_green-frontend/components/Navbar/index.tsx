@@ -85,6 +85,20 @@ export default function Navbar() {
     return () => { document.body.style.overflow = ""; };
   }, [isMenuOpen]);
 
+  // ESC closes the mobile menu while it's open.
+  useEffect(() => {
+    if (!isMenuOpen) return;
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setIsMenuOpen(false);
+      }
+    }
+
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [isMenuOpen]);
+
   return (
     <>
       {/* ── Header bar ─────────────────────────────────────────────────────── */}
