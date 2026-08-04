@@ -7,7 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 This is a monorepo with two independent projects, neither of which is wired to the other yet:
 
 - `fiddlers_green-frontend/` — a Next.js (App Router) site.
-- `fiddlers_green-backend/` — a minimal FastAPI backend (Phase 10), providing `/contact` and `/chat` endpoints. See [Phase 10 Completed](#phase-10-completed--backend--ai-assistant) below.
+- `fiddlers_green-backend/` — a minimal FastAPI backend (Phase 10), providing `/contact` and `/chat` endpoints, now backed by PostgreSQL via async SQLAlchemy + Alembic (Phase 14). See [Phase 10 Completed](#phase-10-completed--backend--ai-assistant) and [Phase 14 Completed](#phase-14-completed--postgresql--sqlalchemy-async--alembic) below.
 
 There is no root-level package.json, build system, or workspace tooling tying the two together — treat them as separate projects and `cd` into `fiddlers_green-frontend` for any npm/build/lint command.
 
@@ -44,7 +44,7 @@ Key versions actually installed: Next.js 16.2.10, React 19.2.4. The App Router (
 
 ### Current state
 
-All primary routes are implemented and validated. Phases 1-13 are complete; the current completed milestone is Phase 13 — Final Production Polish & QA (Deployment Readiness). The next phase is Phase 14 — VPS Deployment with NGINX + Domain + SSL.
+All primary routes are implemented and validated. Phases 1-14 are complete; the current completed milestone is Phase 14 — PostgreSQL + SQLAlchemy (async) + Alembic. The next phase is Phase 15 — Authentication & Role-Based Access Control (RBAC). See `PHASES_14_15_16_ROADMAP_AND_TUTORIALS.md` for the full Phase 15/16 spec and Phase 17's renumbered VPS deployment tasks.
 
 **Route status:**
 - `/` — Hero section (Phase 3) plus a skippable cinematic intro sequence on first visit per session (Phase 9)
@@ -75,6 +75,13 @@ All primary routes are implemented and validated. Phases 1-13 are complete; the 
 - `data/entryOptions.ts` — Gummy entry options (ENTRY_OPTIONS const, EntryOptionId type)
 - `lib/api.ts` — generic `postJson` helper against `NEXT_PUBLIC_BACKEND_URL` (Phase 10)
 - `hooks/useChatMessages.ts` — shared message state and `sendMessage` logic; consumed by both `ChatWidget` and `FloatingChat` (Phase 12)
+
+**Backend data layer (Phase 14):**
+- `fiddlers_green-backend/database.py` — async SQLAlchemy engine, `AsyncSessionLocal` session factory, `Base` declarative class, `get_db()` FastAPI dependency
+- `fiddlers_green-backend/db_models/` — SQLAlchemy ORM models: `ContactSubmission` (implemented), `Product` and `User` (scaffolded for Phase 15, no routes yet)
+- `fiddlers_green-backend/repositories/contact.py` — `save_contact_submission()`; all DB writes for `/contact` go through this module, never raw SQL in the route
+- `fiddlers_green-backend/alembic/` + `alembic.ini` — async Alembic migrations; `alembic/versions/483f420bc9c8_initial_schema.py` creates all three tables
+- `fiddlers_green-backend/entrypoint.sh` — runs `alembic upgrade head` before starting uvicorn; degrades gracefully (logs a warning, still starts the server) if the DB is unavailable at container startup, rather than crashing
 
 ## Phase 2 Completed — Layout & Navbar Foundation
 
@@ -516,7 +523,41 @@ Phase 10 is complete. The project is now a fully functional full-stack applicati
 
 ---
 
-## Phase 14 — VPS Deployment with NGINX + Domain + SSL
+## Phase 14 Completed — PostgreSQL + SQLAlchemy (async) + Alembic
+
+Phase 14 introduced a database layer into the existing FastAPI backend, following `PHASES_14_15_16_ROADMAP_AND_TUTORIALS.md`'s Tutorial A step-by-step, with zero breaking changes to `/health`, `/contact`, or `/chat`'s request/response contracts.
+
+### What was built
+- **Dependencies:** `sqlalchemy[asyncio]==2.0.36`, `asyncpg==0.30.0`, `alembic==1.14.0`, `greenlet==3.1.1` added to `fiddlers_green-backend/requirements.txt`.
+- **Environment:** `DATABASE_URL` added to `.env`, `.env.example`, and a new `.env.local.example` (Docker-facing template — confirmed the backend's `.gitignore` only excludes `.env` itself, so no negation rule was needed, unlike the frontend's Phase 13 `.env*` issue).
+- **Docker Compose:** a `db` service (`postgres:15-alpine`, health-checked, no port published to the host) plus a `postgres_data` named volume; `backend` depends on `db`'s health and receives the Docker-network `DATABASE_URL` via `environment:` (which takes precedence over its existing `env_file:` entry).
+- **`database.py`:** async engine/session factory, `Base`, `get_db()` — see [Backend data layer](#current-state) above.
+- **`db_models/`:** `ContactSubmission` (implemented), `Product` and `User` (scaffolded, no routes — reserved for Phase 15).
+- **Alembic:** async template initialized; `alembic/env.py` wired to `Base.metadata` via `db_models`; initial migration creates all three tables.
+- **`repositories/contact.py`:** `save_contact_submission()` — the only code path allowed to write `ContactSubmission` rows.
+- **`routes/contact.py`:** after a successful email send, writes to the DB inside a `try/except` that only logs on failure — the HTTP response shape is unchanged either way.
+- **`entrypoint.sh`:** runs migrations, then starts uvicorn regardless of migration outcome (see deviation below).
+
+### Deviations from the tutorial document (found during execution, not assumptions)
+- **`alembic.ini`'s `sqlalchemy.url = %(DATABASE_URL)s` does not work.** Python `configparser` interpolation only substitutes other keys *within the ini file* — it never reads `os.environ`. Fixed in `alembic/env.py` by explicitly injecting `os.getenv("DATABASE_URL")` via `config.set_main_option(...)` right after `target_metadata` is set. The inert `%(DATABASE_URL)s` line was left in `alembic.ini` to keep the diff minimal.
+- **The tutorial's `entrypoint.sh` uses `set -e`,** which would crash the container if `alembic upgrade head` fails (e.g. the DB is temporarily down) — contradicting this same document's own Phase 14 §7 ("DB connection failure at startup logs a structured error but does not crash the application"). The shipped `entrypoint.sh` checks the migration's exit status explicitly instead: on failure it logs a clear `WARNING` and still execs uvicorn. Verified live by stopping the `db` container and restarting `backend` — `/health` and the frontend both stayed up throughout the outage; migrations re-ran cleanly once `db` came back, with no data loss.
+- **Host-machine Alembic commands (`alembic current`, `alembic upgrade head` run directly on Windows, outside Docker) can't reach the `db` container** — its port is deliberately not published to the host (correct, and matches Phase 16's later "no DB ports exposed" requirement). All Alembic commands in this phase were run via `docker compose exec backend alembic ...` instead; the initial migration file was generated inside the container and copied out with `docker cp` so it could be committed.
+- Added `fiddlers_green-backend/.gitattributes` (`entrypoint.sh text eol=lf`) — this repo has `core.autocrlf=true` with no prior `.gitattributes`, which would silently convert `entrypoint.sh` to CRLF on a future checkout and break its shebang inside the Linux container. Not in the tutorial; added proactively.
+
+### Known limitation (accepted, not fixed)
+- `POST /contact` cannot be validated fully end-to-end via a live HTTP call in this local dev environment: `SMTP_HOST`/`SMTP_USER`/etc. are blank in `.env` (pre-existing, unrelated to Phase 14), so the email send fails and returns `502` *before* the route ever reaches the DB write — exactly the same pre-existing behavior as before Phase 14. The DB-write path itself was verified correct by calling `save_contact_submission()` directly through the same `AsyncSessionLocal` the route's `get_db` dependency uses, both right after Step 10 and again after Step 12's full clean rebuild (`docker compose down -v && up --build`) — both times the expected row landed in `contact_submissions`. Real SMTP credentials would be needed to observe this via `curl` directly.
+
+### Validation completed
+- `python -c "import sqlalchemy, asyncpg, alembic"`, `import database`, `import db_models`, `import repositories.contact` — all clean.
+- `docker compose up --build -d` (including a full `down -v` clean rebuild) — all 3 services healthy; `\dt` shows `alembic_version`, `contact_submissions`, `products`, `users`.
+- `/health` → `{"status":"ok"}` and frontend → `HTTP 200`, unchanged throughout every step, including during a simulated DB outage.
+- `/chat` → non-empty AI reply, unaffected (Phase 14 makes no changes to `/chat`).
+- Existing `/contact` validation (422 on invalid `inquiry_type`, 422 on missing required field) confirmed unchanged.
+- `git status` clean after every step; no `.env` with real secrets ever staged.
+
+---
+
+## Phase 17 — VPS Deployment with NGINX + Domain + SSL
 
 **Status: NOT STARTED**
 
