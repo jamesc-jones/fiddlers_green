@@ -4,6 +4,21 @@
 # Not implemented yet; frontend/backend are still reached directly by port.
 
 services:
+  db:
+    image: postgres:15-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: fiddlers_green
+      POSTGRES_USER: fg_user
+      POSTGRES_PASSWORD: fg_password
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U fg_user -d fiddlers_green"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
   backend:
     build: ./fiddlers_green-backend
     container_name: fiddlers-backend
@@ -11,6 +26,11 @@ services:
       - "8000:8000"
     env_file:
       - ./fiddlers_green-backend/.env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://fg_user:fg_password@db:5432/fiddlers_green
+    depends_on:
+      db:
+        condition: service_healthy
     healthcheck:
       # python:3.11-slim has no curl installed; urllib is stdlib, so this
       # avoids adding a package just for the healthcheck.
@@ -50,3 +70,6 @@ services:
     depends_on:
       backend:
         condition: service_healthy
+
+volumes:
+  postgres_data:
