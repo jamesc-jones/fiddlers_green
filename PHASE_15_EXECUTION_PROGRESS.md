@@ -60,9 +60,17 @@ Step titles below are copied verbatim from that document's `### STEP B-N` headin
   importable), Pydantic 2.13.4 in use; `models/contact.py` and `models/chat.py`
   unchanged.
 
+- [x] B-6 — Create FastAPI Auth Dependencies
+  Commit: `9a70c98`
+  Validation: `python -c "from dependencies.auth import get_current_user, require_admin; print('auth deps OK')"`
+  printed `auth deps OK` via the backend's `.venv` interpreter. `DATABASE_URL is not set`
+  and `JWT_SECRET is not set` warnings are the same expected/benign ones seen in B-4 —
+  standalone invocation, no `load_dotenv()` — and are not the previously-flagged
+  `main.py` import-order risk manifesting, since `main.py` is untouched by this step.
+  `dependencies/auth.py` is not imported anywhere yet (no route wiring until B-7/B-8).
+
 ## Pending
 
-- [ ] B-6 — Create FastAPI Auth Dependencies
 - [ ] B-7 — Create the Auth Router
 - [ ] B-8 — Register the Auth Router in main.py
 - [ ] B-9 — Create the Admin Product Router
