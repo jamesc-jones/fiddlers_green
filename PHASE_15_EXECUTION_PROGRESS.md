@@ -218,7 +218,30 @@ Step titles below are copied verbatim from that document's `### STEP B-N` headin
   `/auth/*` at B-8 rather than B-7, and `/admin/*`+`/customer/*` at B-11 rather than
   B-9/B-10.
 
+- [x] B-17 — Register the Cart Router in main.py
+  Commit: `41e44c0`
+  Validation: full `docker compose up --build -d` against real Postgres. `/health` →
+  `{"status":"ok"}`; registered `carttest@example.com`; `GET /cart` for a brand-new
+  user → `{"items":[],"total_items":0}` (exact match); `POST /cart/add` (qty=2) →
+  returns updated cart with the item; `GET /cart` → same item persisted; `DELETE
+  /cart/remove` → returns emptied cart; `GET /cart` after → `{"items":[],"total_items":0}`;
+  frontend `localhost:3000` → 200. Full HTTP-level add/view/remove flow exercised for
+  the first time (B-16 could only test at the repository level since the router wasn't
+  registered yet).
+  Deviation documented (not fixed — nothing is broken): the tutorial expects
+  unauthenticated `GET /cart` to return 403; the installed `fastapi==0.141.1` actually
+  returns 401 (`{"detail":"Not authenticated"}`, `WWW-Authenticate: Bearer`). Confirmed
+  via source inspection of `HTTPBase.make_not_authenticated_error`, which uses
+  `HTTP_401_UNAUTHORIZED` for a fully missing Authorization header in this FastAPI
+  version — arguably more correct per RFC 7235 (401 = no/invalid credentials, 403 =
+  authenticated but forbidden) than older FastAPI releases' 403-for-everything
+  behavior. Unauthenticated access is still correctly rejected; only the numeric code
+  differs from the tutorial's assumption. Consistent with B-11, which already saw 401
+  for `/admin/products` without a token and had explicitly written its own expectation
+  as "403 or 401" for the same reason — B-17's tutorial text just wasn't written with
+  that same allowance.
+
 ## Pending
 
-- [ ] B-17 — Register the Cart Router in main.py
+- [ ] B-18 — Final Phase 15 Validation
 - [ ] B-18 — Final Phase 15 Validation
