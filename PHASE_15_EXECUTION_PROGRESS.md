@@ -118,9 +118,24 @@ Step titles below are copied verbatim from that document's `### STEP B-N` headin
   expected/benign `DATABASE_URL`/`JWT_SECRET` warnings as prior standalone-import
   validations. Not registered in `main.py` yet — that's B-11, alongside admin.py.
 
+- [x] B-11 — Register Admin & Customer Routers in main.py
+  Commit: `e93d3fa`
+  Validation: full `docker compose up --build -d` against real Postgres. `/health` →
+  `{"status":"ok"}`; `/contact` → 502 with the same pre-existing SMTP-not-configured
+  message (unchanged, not a regression); `/admin/products` with no token → 401; with a
+  customer-role token → 403; with an admin-role token → create + list both succeed;
+  `/customer/me` with an admin token → correct profile (admin also satisfies
+  `require_customer`); `/customer/orders` with a customer token → `[]`; frontend
+  `localhost:3000` → 200. RBAC boundary confirmed correct in both directions (customer
+  blocked from admin routes, both roles allowed on customer routes). No unexpected
+  behavior — nothing to stop and report.
+  Test setup: promoted the B-8 `customer1@example.com` test user to `role='admin'` via
+  `docker compose exec db psql`, per the tutorial's own instruction; registered a second
+  `customer2@example.com` user (still `role='customer'`) to test the RBAC boundary in
+  both directions.
+
 ## Pending
 
-- [ ] B-11 — Register Admin & Customer Routers in main.py
 - [ ] B-12 — Create the CartItem DB Model
 - [ ] B-13 — Generate and Apply the CartItem Migration
 - [ ] B-14 — Create the Cart Repository
