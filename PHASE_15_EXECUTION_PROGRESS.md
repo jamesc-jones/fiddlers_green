@@ -111,9 +111,15 @@ Step titles below are copied verbatim from that document's `### STEP B-N` headin
   router's usage exactly (scaffolded in Phase 14, unmodified here). Not registered in
   `main.py` yet — that's B-11. `data/products.ts`-driven frontend catalog is untouched.
 
+- [x] B-10 — Create the Customer Router
+  Commit: `4bd8603`
+  Validation: `python -c "from routes.customer import router; print('customer router OK')"`
+  printed `customer router OK` via the backend's `.venv` interpreter. Same
+  expected/benign `DATABASE_URL`/`JWT_SECRET` warnings as prior standalone-import
+  validations. Not registered in `main.py` yet — that's B-11, alongside admin.py.
+
 ## Pending
 
-- [ ] B-10 — Create the Customer Router
 - [ ] B-11 — Register Admin & Customer Routers in main.py
 - [ ] B-12 — Create the CartItem DB Model
 - [ ] B-13 — Generate and Apply the CartItem Migration
