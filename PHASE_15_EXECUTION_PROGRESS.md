@@ -101,9 +101,18 @@ Step titles below are copied verbatim from that document's `### STEP B-N` headin
   with no other env-var source. Not fixed because there was nothing to fix; recorded so
   this isn't misremembered as a resolved bug rather than a non-issue.
 
+- [x] B-9 — Create the Admin Product Router
+  Commit: `83c4eda`
+  Validation: `python -c "from routes.admin import router; print('admin router OK')"`
+  printed `admin router OK` via the backend's `.venv` interpreter. Same expected/benign
+  `DATABASE_URL`/`JWT_SECRET` warnings as prior standalone-import validations.
+  Verified before writing: `db_models/product.py`'s `Product` model already has `id`,
+  `name`, `category`, `description`, `dosage`, `pricing`, `is_active` matching this
+  router's usage exactly (scaffolded in Phase 14, unmodified here). Not registered in
+  `main.py` yet — that's B-11. `data/products.ts`-driven frontend catalog is untouched.
+
 ## Pending
 
-- [ ] B-9 — Create the Admin Product Router
 - [ ] B-10 — Create the Customer Router
 - [ ] B-11 — Register Admin & Customer Routers in main.py
 - [ ] B-12 — Create the CartItem DB Model
