@@ -29,7 +29,7 @@ Step titles below are copied verbatim from that document's `### STEP B-N` headin
 ## Completed (continued)
 
 - [x] B-3 — Create the Auth Service
-  Commit: (pending — add after commit)
+  Commit: `7898bdd`
   Validation: `python -c "from services.auth_service import hash_password, verify_password; ..."`
   printed `auth_service OK` — bcrypt hash/verify round-trip succeeded via the backend's
   `.venv` interpreter.
