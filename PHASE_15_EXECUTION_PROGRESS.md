@@ -193,9 +193,32 @@ Step titles below are copied verbatim from that document's `### STEP B-N` headin
   Verified before writing: `models/chat.py` confirms the plain-`BaseModel` convention
   this file follows; no existing model file modified.
 
+- [x] B-16 — Create the Cart Router
+  Commit: `eb00852`
+  Validation: `python -c "from routes.cart import router; print('cart router OK')"`
+  printed `cart router OK`. Structural note: per the established B-7/B-8 and
+  B-9-10/B-11 split, B-16 creates the router but does not register it in `main.py` —
+  that's B-17, so `/cart/*` is not reachable over HTTP yet.
+  Deeper validation performed instead of stopping at the import check: found the
+  running `backend` container was stale (no bind mount — same class of issue as B-13),
+  missing B-14/B-15/B-16's code entirely. Rebuilt via `docker compose up --build -d
+  backend`, confirmed healthy and `/health` unaffected. Then ran a real integration
+  test inside the container against the live Postgres DB, calling
+  `repositories.cart`'s functions directly (the same functions this router calls)
+  using genuine data: `customer2@example.com` (role `customer`) and the real
+  "Test Gummy" product from B-11.
+  Results: `add_to_cart` creates a new row (qty=2); calling it again for the same
+  product increments to qty=5 rather than duplicating; `get_cart` returns exactly 1
+  item with qty=5; `remove_from_cart` returns `True` and deletes the row; calling it
+  again returns `False` (idempotent no-op, matches spec); `get_cart` after removal
+  returns 0 items; `add_to_cart` against a nonexistent product raises `ValueError`,
+  which is exactly what the router's `try/except ValueError → HTTP 404` depends on.
+  Full HTTP-level `/cart/*` testing (status codes, auth enforcement, response shapes)
+  deferred to B-17, once the router is actually registered — same precedent as testing
+  `/auth/*` at B-8 rather than B-7, and `/admin/*`+`/customer/*` at B-11 rather than
+  B-9/B-10.
+
 ## Pending
 
-- [ ] B-16 — Create the Cart Router
-- [ ] B-16 — Create the Cart Router
 - [ ] B-17 — Register the Cart Router in main.py
 - [ ] B-18 — Final Phase 15 Validation
