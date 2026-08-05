@@ -80,9 +80,29 @@ Step titles below are copied verbatim from that document's `### STEP B-N` headin
   specifically (not "B-6/B-7" as originally guessed before the full tutorial was read)
   — B-7 only creates `routes/auth.py`, it does not register it.
 
+- [x] B-8 — Register the Auth Router in main.py
+  Commit: `7fd87d2`
+  Validation: full `docker compose up --build -d` against real Postgres. `GET /health`
+  → `{"status":"ok"}` (unaffected). `POST /auth/register` → created user with correct
+  `UserResponse` shape. `POST /auth/login` → valid JWT with `token_type: "bearer"`.
+  `GET /auth/me` with that token → correct profile. All four confirmed against the
+  live container, not just import-level checks.
+  Risk resolution (previously flagged in B-3/B-6/B-7): confirmed via
+  `docker exec fiddlers-backend printenv JWT_SECRET` and
+  `docker exec fiddlers-backend python -c "import services.auth_service as a; print(repr(a.JWT_SECRET))"`
+  that the real secret is present in both the container's OS environment and the
+  imported module — **the risk does not manifest in the Docker deployment.** Root
+  cause: `docker-compose.yml`'s `env_file: ./fiddlers_green-backend/.env` on the
+  `backend` service injects `JWT_SECRET` into the container's OS-level environment
+  before the Python process starts at all, so `os.getenv("JWT_SECRET")` at import time
+  sees the real value regardless of import order relative to `main.py`'s
+  `load_dotenv()` call. `load_dotenv()` is redundant for the Docker path specifically —
+  it would only be load-bearing for a bare `uvicorn main:app` run directly on the host
+  with no other env-var source. Not fixed because there was nothing to fix; recorded so
+  this isn't misremembered as a resolved bug rather than a non-issue.
+
 ## Pending
 
-- [ ] B-8 — Register the Auth Router in main.py
 - [ ] B-9 — Create the Admin Product Router
 - [ ] B-10 — Create the Customer Router
 - [ ] B-11 — Register Admin & Customer Routers in main.py
