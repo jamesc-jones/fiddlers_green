@@ -173,10 +173,17 @@ Step titles below are copied verbatim from that document's `### STEP B-N` headin
   (the `db` service's port isn't published to the host — confirmed via `docker compose
   ps` showing `5432/tcp` with no host-side mapping).
 
+- [x] B-14 — Create the Cart Repository
+  Commit: `46fc90a`
+  Validation: `python -c "from repositories.cart import get_cart, add_to_cart, remove_from_cart; print('cart repo OK')"`
+  printed `cart repo OK` via the backend's `.venv` interpreter. Expected benign
+  `DATABASE_URL is not set` warning only.
+  Verified before writing: matches `repositories/contact.py`'s established pattern
+  exactly (session → commit → refresh → log). Not wired into any route yet — that's
+  B-16.
+
 ## Pending
 
-- [ ] B-14 — Create the Cart Repository
-- [ ] B-14 — Create the Cart Repository
 - [ ] B-15 — Create Cart Pydantic Schemas
 - [ ] B-16 — Create the Cart Router
 - [ ] B-17 — Register the Cart Router in main.py
