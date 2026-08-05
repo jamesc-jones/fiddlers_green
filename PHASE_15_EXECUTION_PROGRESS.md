@@ -69,9 +69,19 @@ Step titles below are copied verbatim from that document's `### STEP B-N` headin
   `main.py` import-order risk manifesting, since `main.py` is untouched by this step.
   `dependencies/auth.py` is not imported anywhere yet (no route wiring until B-7/B-8).
 
+- [x] B-7 — Create the Auth Router
+  Commit: `389f6e0`
+  Validation: `python -c "from routes.auth import router; print('auth router OK')"`
+  printed `auth router OK` via the backend's `.venv` interpreter. Same expected/benign
+  `DATABASE_URL`/`JWT_SECRET` warnings as B-4/B-6 (standalone invocation, no
+  `load_dotenv()`). `main.py` still untouched — the previously-flagged import-order
+  risk does not manifest yet.
+  Correction to the B-3 note: `main.py` isn't wired to the auth router until **B-8**
+  specifically (not "B-6/B-7" as originally guessed before the full tutorial was read)
+  — B-7 only creates `routes/auth.py`, it does not register it.
+
 ## Pending
 
-- [ ] B-7 — Create the Auth Router
 - [ ] B-8 — Register the Auth Router in main.py
 - [ ] B-9 — Create the Admin Product Router
 - [ ] B-10 — Create the Customer Router
