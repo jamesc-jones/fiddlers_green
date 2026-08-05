@@ -40,9 +40,19 @@ Step titles below are copied verbatim from that document's `### STEP B-N` headin
   `auth_service` yet), but will need the same fix once a future step (B-6/B-7) wires an
   auth router into `main.py`'s import chain. Watch for this at that step's validation.
 
+- [x] B-4 — Create the User Repository
+  Commit: `a7df210`
+  Validation: `python -c "from repositories.user import get_user_by_email; print('user repo OK')"`
+  printed `user repo OK` via the backend's `.venv` interpreter. `DATABASE_URL is not set`
+  and `JWT_SECRET is not set` warnings are expected (no `load_dotenv()` in this
+  standalone invocation) and match established Phase 14 warn-not-crash behavior — not
+  a regression.
+  Verified before writing: `db_models/user.py`'s `User` model already has `id`, `email`,
+  `password_hash`, `role` fields matching this repository's usage exactly (scaffolded
+  in Phase 14, unmodified here).
+
 ## Pending
 
-- [ ] B-4 — Create the User Repository
 - [ ] B-5 — Create Auth Pydantic Schemas
 - [ ] B-6 — Create FastAPI Auth Dependencies
 - [ ] B-7 — Create the Auth Router
