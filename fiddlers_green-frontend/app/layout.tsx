@@ -3,6 +3,7 @@ import dynamic from "next/dynamic";
 import { Cormorant_Garamond, Inter } from "next/font/google";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
+import { AuthProvider } from "@/contexts/AuthContext";
 import "./globals.css";
 
 // `ssr: false` isn't allowed on next/dynamic inside a Server Component (this
@@ -79,17 +80,19 @@ export default function RootLayout({
       suppressHydrationWarning
     >
       <body className="bg-black text-brand-cream antialiased min-h-screen flex flex-col">
-        <Navbar />
-        {/*
-          pt-16 md:pt-20 offsets the fixed Navbar height so page content
-          doesn't slide underneath it. Match these values if you change
-          the Navbar's h-16 / h-20 classes.
-        */}
-        <main className="flex-1 pt-16 md:pt-20">
-          {children}
-        </main>
-        <Footer />
-        <FloatingChat />
+        <AuthProvider>
+          <Navbar />
+          {/*
+            pt-16 md:pt-20 offsets the fixed Navbar height so page content
+            doesn't slide underneath it. Match these values if you change
+            the Navbar's h-16 / h-20 classes.
+          */}
+          <main className="flex-1 pt-16 md:pt-20">
+            {children}
+          </main>
+          <Footer />
+          <FloatingChat />
+        </AuthProvider>
       </body>
     </html>
   );

@@ -13,16 +13,14 @@ const BACKEND_URL =
     ? `${window.location.protocol}//${window.location.hostname}:8000`
     : "http://backend:8000");
 
-export async function postJson<TResponse>(
-  path: string,
-  body: unknown
-): Promise<TResponse> {
-  const response = await fetch(`${BACKEND_URL}${path}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
+function authHeaders(token?: string): Record<string, string> {
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
 
+async function handleResponse<TResponse>(
+  path: string,
+  response: Response
+): Promise<TResponse> {
   if (!response.ok) {
     const data = await response.json().catch(() => null);
     const detail = data?.detail;
@@ -30,6 +28,48 @@ export async function postJson<TResponse>(
       typeof detail === "string" ? detail : `Request to ${path} failed`
     );
   }
-
+  if (response.status === 204) {
+    return undefined as TResponse;
+  }
   return response.json() as Promise<TResponse>;
+}
+
+export async function postJson<TResponse>(
+  path: string,
+  body: unknown,
+  token?: string
+): Promise<TResponse> {
+  const response = await fetch(`${BACKEND_URL}${path}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...authHeaders(token) },
+    body: JSON.stringify(body),
+  });
+
+  return handleResponse<TResponse>(path, response);
+}
+
+export async function getJson<TResponse>(
+  path: string,
+  token?: string
+): Promise<TResponse> {
+  const response = await fetch(`${BACKEND_URL}${path}`, {
+    method: "GET",
+    headers: { ...authHeaders(token) },
+  });
+
+  return handleResponse<TResponse>(path, response);
+}
+
+export async function deleteJson<TResponse>(
+  path: string,
+  body: unknown,
+  token?: string
+): Promise<TResponse> {
+  const response = await fetch(`${BACKEND_URL}${path}`, {
+    method: "DELETE",
+    headers: { "Content-Type": "application/json", ...authHeaders(token) },
+    body: JSON.stringify(body),
+  });
+
+  return handleResponse<TResponse>(path, response);
 }

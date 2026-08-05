@@ -1,9 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { useAuth } from "@/contexts/AuthContext";
 
 // ─── Navigation data ──────────────────────────────────────────────────────────
 // Add, rename, or reorder links here. The rest of the component updates automatically.
@@ -15,6 +16,36 @@ const NAV_LINKS = [
   { label: "Chat",     href: "/chat"     },
   { label: "Contact",  href: "/contact"  },
 ] as const;
+
+// Auth-aware links are computed at render time (not a static array like
+// NAV_LINKS above) because they depend on login state and role — logged
+// out, customer, and admin all see a different set. Logout is handled
+// separately since it's an action, not a navigable Link.
+interface AuthLink {
+  label: string;
+  href: string;
+  testId: string;
+}
+
+function getAuthLinks(
+  isLoggedIn: boolean,
+  isAdmin: boolean
+): AuthLink[] {
+  if (!isLoggedIn) {
+    return [
+      { label: "Login", href: "/login", testId: "nav-login" },
+      { label: "Register", href: "/register", testId: "nav-register" },
+    ];
+  }
+  const links: AuthLink[] = [
+    { label: "Cart", href: "/cart", testId: "nav-cart" },
+    { label: "Account", href: "/account", testId: "nav-account" },
+  ];
+  if (isAdmin) {
+    links.push({ label: "Admin", href: "/admin/products", testId: "nav-admin" });
+  }
+  return links;
+}
 
 // ─── Animation variants ───────────────────────────────────────────────────────
 // Defined outside the component so they're not recreated on every render.
@@ -60,8 +91,18 @@ const hamburgerBot = {
 
 export default function Navbar() {
   const pathname = usePathname();
+  const router = useRouter();
+  const { user, isAdmin, logout } = useAuth();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
+
+  const authLinks = getAuthLinks(!!user, isAdmin);
+
+  function handleLogout() {
+    logout();
+    setIsMenuOpen(false);
+    router.push("/");
+  }
 
   // Close mobile menu when navigating to a new page.
   // Adjusted during render (not in an effect) per React's guidance for
@@ -159,6 +200,47 @@ export default function Navbar() {
                 </li>
               );
             })}
+
+            {/* Divider between content nav and auth-aware nav */}
+            <li aria-hidden="true" className="h-4 w-px bg-white/20" />
+
+            {authLinks.map(({ label, href, testId }) => {
+              const isActive = pathname === href;
+              return (
+                <li key={href}>
+                  <Link
+                    href={href}
+                    data-testid={testId}
+                    className={[
+                      "relative font-body text-sm tracking-[0.12em] uppercase",
+                      "transition-colors duration-200",
+                      "after:absolute after:left-0 after:-bottom-0.5",
+                      "after:h-px after:bg-brand-gold",
+                      "after:transition-all after:duration-300",
+                      isActive
+                        ? "text-brand-gold after:w-full"
+                        : "text-white/70 hover:text-white after:w-0 hover:after:w-full",
+                    ].join(" ")}
+                    aria-current={isActive ? "page" : undefined}
+                  >
+                    {label}
+                  </Link>
+                </li>
+              );
+            })}
+
+            {user && (
+              <li>
+                <button
+                  type="button"
+                  onClick={handleLogout}
+                  data-testid="nav-logout"
+                  className="font-body text-sm tracking-[0.12em] uppercase text-white/70 hover:text-brand-gold transition-colors duration-200"
+                >
+                  Logout
+                </button>
+              </li>
+            )}
           </ul>
 
           {/* ── Mobile hamburger ──────────────────────────────────────────── */}
@@ -238,6 +320,54 @@ export default function Navbar() {
                   </motion.li>
                 );
               })}
+
+              {authLinks.map(({ label, href, testId }, i) => {
+                const isActive = pathname === href;
+                return (
+                  <motion.li
+                    key={href}
+                    custom={NAV_LINKS.length + i}
+                    variants={mobileLinkVariants}
+                    initial="closed"
+                    animate="open"
+                    exit="closed"
+                  >
+                    <Link
+                      href={href}
+                      data-testid={testId}
+                      className={[
+                        "font-display text-4xl italic tracking-wide",
+                        "transition-colors duration-200",
+                        isActive
+                          ? "text-brand-gold"
+                          : "text-white/80 hover:text-white",
+                      ].join(" ")}
+                      aria-current={isActive ? "page" : undefined}
+                    >
+                      {label}
+                    </Link>
+                  </motion.li>
+                );
+              })}
+
+              {user && (
+                <motion.li
+                  custom={NAV_LINKS.length + authLinks.length}
+                  variants={mobileLinkVariants}
+                  initial="closed"
+                  animate="open"
+                  exit="closed"
+                >
+                  <button
+                    type="button"
+                    onClick={handleLogout}
+                    data-testid="nav-logout"
+                    className="font-display text-4xl italic tracking-wide text-white/80 hover:text-white transition-colors duration-200"
+                  >
+                    Logout
+                  </button>
+                </motion.li>
+              )}
             </ul>
 
             {/* Subtle brand tagline at the bottom of mobile menu */}
