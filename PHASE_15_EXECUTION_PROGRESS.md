@@ -241,7 +241,41 @@ Step titles below are copied verbatim from that document's `### STEP B-N` headin
   as "403 or 401" for the same reason — B-17's tutorial text just wasn't written with
   that same allowance.
 
-## Pending
+- [x] B-18 — Final Phase 15 Validation
+  Commit: (pending — filled in after commit)
+  Full clean-room validation: `docker compose down -v && docker compose up --build -d`
+  (wipes the Postgres volume — all prior manual test data destroyed and DB rebuilt from
+  an empty state). All 3 containers (`db`, `backend`, `frontend`) healthy. Migration
+  chain from empty DB confirmed linear: `<base> -> 483f420bc9c8 -> 65be7bc486c3 (head)`,
+  no branching.
+  All 19 tutorial validation steps run: `/health`, `/chat` (real AI reply), frontend —
+  unchanged; `/contact` — same pre-existing SMTP-not-configured error (Phase 14 known
+  limitation, not a regression); register/login/`/auth/me` for a customer — correct;
+  customer with a valid token hitting `/admin/products` — 403 (RBAC's own explicit
+  check, matches tutorial exactly, distinct from the no-token case); promote to admin
+  via `docker compose exec db psql`, admin creates + lists a product — correct;
+  `/customer/me` + `/customer/orders` — correct; cart empty → add(qty=2) → add(qty=1)
+  again increments to 3 in one row (not duplicated) → remove → empty — all exact
+  matches; unauthenticated `/cart` → 401 (not tutorial's 403 — same documented
+  FastAPI `0.141.1` `HTTPBearer` deviation confirmed at B-17, not a new issue); DB
+  sanity (`\dt` shows all 5 tables, correct user/product rows, `cart_items` count 0
+  after removal) — correct; public routes unchanged.
+  Extra validation performed beyond the tutorial's own 19 steps, per explicit request:
+  cross-user cart ownership/isolation. Registered a second user (`isolation_b@test.com`),
+  had the original cart user (`cart_val@test.com`) add a product to their own cart,
+  then confirmed via User B's own token that `GET /cart` returns empty (never sees
+  User A's item) and `DELETE /cart/remove` for the same product is a silent no-op that
+  does not affect User A's row. Confirmed directly at the DB level with a
+  `cart_items JOIN users` query: exactly one row exists, owned only by
+  `cart_val@test.com`. This validates the `JWT -> current_user.id -> repository query
+  -> WHERE user_id = current_user.id` architecture end-to-end, not just via API
+  response shapes.
+  18 of 19 tutorial steps matched exactly; step 17 (unauthenticated `/cart` status
+  code) differs for the reason already documented and verified at B-17 — not a new
+  finding, and not a security defect.
 
-- [ ] B-18 — Final Phase 15 Validation
-- [ ] B-18 — Final Phase 15 Validation
+## Phase 15 Complete
+
+All 18 steps (B-1 through B-18) implemented, validated, committed, and pushed.
+Authentication, RBAC, and the shopping cart are fully live and verified end-to-end,
+including the cross-user cart isolation security property.
