@@ -134,9 +134,24 @@ Step titles below are copied verbatim from that document's `### STEP B-N` headin
   `customer2@example.com` user (still `role='customer'`) to test the RBAC boundary in
   both directions.
 
+- [x] B-12 — Create the CartItem DB Model
+  Commit: `8ce1c74`
+  Validation: `python -c "from db_models.cart import CartItem; print('CartItem model OK')"`
+  and `python -c "from db_models import CartItem, User, Product; print('all models OK')"`
+  both printed successfully via the backend's `.venv` interpreter. Expected benign
+  `DATABASE_URL is not set` warning only.
+  Deviation (necessary, not a refactor): the tutorial's literal instructions only say to
+  add a `cart_items = relationship(...)` line to `db_models/user.py` and
+  `db_models/product.py`, but neither file previously imported `relationship` from
+  `sqlalchemy.orm` (only `Mapped, mapped_column`). Without adding it to the existing
+  import line, both class bodies would raise `NameError` at import time. Added
+  `relationship` to both files' existing `sqlalchemy.orm` import — required for the
+  tutorial's own specified code to run, not an unrequested change.
+  Not yet migrated — B-13 generates and applies the actual Alembic migration for the
+  new `cart_items` table; the model exists in Python only until then.
+
 ## Pending
 
-- [ ] B-12 — Create the CartItem DB Model
 - [ ] B-13 — Generate and Apply the CartItem Migration
 - [ ] B-14 — Create the Cart Repository
 - [ ] B-15 — Create Cart Pydantic Schemas
