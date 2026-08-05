@@ -1,7 +1,8 @@
 # Fiddler's Green — Phases 14–16: Roadmap & Claude CLI Implementation Tutorials
 
-> **Status of existing phases:** Phases 1–13 complete and validated. Phase 17 (VPS Deployment with NGINX + Domain + SSL) is not started.
-> This document inserts **three new phases** immediately before Phase 17 and provides step-by-step Claude CLI tutorials for Phases 14 and 15.
+> **Status of existing phases:** Phases 1–13 complete and validated. Phase 16 (Product Catalog Integration) is not started.
+> This document covers the application-development phases — Database Integration, Authentication & RBAC, and Product Catalog Integration — and provides step-by-step Claude CLI tutorials for Phases 14 and 15. The production-focused phases that follow (Final Production Polish + QA, and VPS Deployment) have moved to [`PHASES_17_18_ROADMAP_AND_TUTORIALS.md`](./PHASES_17_18_ROADMAP_AND_TUTORIALS.md).
+> Phase 15.1 (Frontend Authentication UI Integration) is documented separately in `PHASE_15_1_AUTH_UI_INTEGRATION.md`, not in this file.
 
 ---
 
@@ -19,10 +20,12 @@
 
 1. [Phase 14 — Database Integration](#phase-14--database-integration)
 2. [Phase 15 — Authentication & RBAC](#phase-15--authentication--role-based-access-control-rbac)
-3. [Phase 16 — Final Production Polish + QA + Deploy Ready](#phase-16--final-production-polish--qa--deploy-ready)
+3. [Phase 16 — Product Catalog Integration](#phase-16--product-catalog-integration)
 4. [Tutorial A — Database Integration (Phase 14)](#tutorial-a--database-integration-phase-14)
 5. [Tutorial B — Authentication & RBAC (Phase 15)](#tutorial-b--authentication--rbac-phase-15)
 6. [Final Safety Guarantee Checklist](#final-safety-guarantee-checklist)
+
+> Phase 15.1 is documented in `PHASE_15_1_AUTH_UI_INTEGRATION.md`. Phases 17–18 are documented in [`PHASES_17_18_ROADMAP_AND_TUTORIALS.md`](./PHASES_17_18_ROADMAP_AND_TUTORIALS.md).
 
 ---
 
@@ -46,7 +49,7 @@
   - Native Docker image (`postgres:15-alpine`) — minimal surface area, small footprint
   - Best-in-class support within SQLAlchemy's async dialect (`asyncpg`)
   - Alembic migrations are first-class for FastAPI + SQLAlchemy stacks
-  - Compatible with Vercel Postgres, Supabase, Neon, and self-hosted VPS — all viable Phase 17 targets
+  - Compatible with Vercel Postgres, Supabase, Neon, and self-hosted VPS — all viable Phase 18 targets
 - **Driver:** `asyncpg` (async) with SQLAlchemy's `AsyncEngine`
 
 ### 2. Data Modeling (Initial Scope)
@@ -204,7 +207,7 @@ Order history is scaffolded as an empty array so the frontend client can be wire
 - JWT secret (`JWT_SECRET`) is a required environment variable — server refuses to start if absent
 - Tokens validated on every protected request (signature, expiry, issuer claim)
 - SQL injection: prevented by SQLAlchemy parameterization (no raw SQL strings)
-- No rate limiting in Phase 15 (deferred to Phase 16 / infrastructure layer)
+- No rate limiting in Phase 15 (deferred to Phase 17 / infrastructure layer)
 
 ### 9. Incremental Rollout Strategy
 
@@ -219,61 +222,97 @@ The frontend continues to work exactly as it does after Phase 13 throughout all 
 
 ---
 
-## Phase 16 — Final Production Polish + QA + Deploy Ready
+## Phase 16 — Product Catalog Integration
 
 **Status: NOT STARTED**
 **Prerequisite:** Phase 15 complete and validated.
-**Goal:** End-to-end validation that every system — frontend, backend, database, auth, AI assistant, Docker — is production-ready and mutually consistent.
 
-### 1. Frontend–Backend Contract Validation
+### Objective
 
-- Automated contract test: for each frontend `fetch`/`postJson` call, assert the backend response shape matches exactly (field names, types, optional vs. required)
-- `/contact` request body shape verified against `ContactRequest` Pydantic model
-- `/chat` request/response verified against `ChatRequest`/`ChatResponse`
-- `/health` response verified (must include `"status": "ok"` at minimum)
+Replace the temporary frontend product model with a fully integrated backend-driven product catalog.
 
-### 2. End-to-End Testing
+Phase 15 intentionally delivered authentication, RBAC, and cart functionality without expanding into product management. Phase 16 connects products, carts, and the frontend experience into one complete shopping workflow.
 
-| Flow | Tool | Pass Criteria |
-|---|---|---|
-| Contact form submission | Playwright | 200 response, row in DB, email sent (mocked) |
-| AI chat | Playwright | Reply returned, no 5xx |
-| Product catalog display | Playwright | All categories render, no console errors |
-| Admin login + product update | Playwright | JWT returned, PUT 200, DB reflects change |
-| Customer registration + login | Playwright | Tokens returned, `/customer/me` 200 |
-| Public routes require no auth | Playwright | All return 200 without Authorization header |
+### Backend Work
 
-### 3. Error Handling Validation
+**Product API** — create public product endpoints:
 
-- Simulate DB offline: frontend contact form must show error UI, not crash
-- Simulate Anthropic API unavailable: chat must show graceful error, not white screen
-- Invalid JWT: 401 returned, frontend handles without crash (where applicable)
-- Expired JWT: 401 returned, frontend prompts re-login (where applicable)
+- `GET /products`
+  - Retrieve active products
+  - Support pagination if required
+  - Return complete product information
+- Product filtering/search:
+  - Category filtering
+  - Name search
+  - Availability filtering
 
-### 4. Performance Checks
+**Product schema expansion** — extend product responses to support:
 
-- Backend API p99 response time < 300ms for `/health`, `/contact` (without email send), `/auth/login`
-- DB query for contact submission INSERT < 20ms
-- Frontend Lighthouse score maintained (no regression from Phase 13 baseline)
+- Product name
+- Description
+- Category
+- Price
+- Image URL
+- Inventory/status information
 
-### 5. Security Validation
+**Product images** — add support for:
 
-- JWT secret is not the default/example value in any environment
-- `/admin/*` returns 403 for a valid customer token
-- `/admin/*` returns 401 for no token
-- Password is never returned in any API response (assert via test)
-- `DISABLE_DOCS=true` confirmed set in production Docker Compose
+- Product image URLs
+- Default product images
+- Future CDN/storage integration compatibility
 
-### 6. Deployment Readiness
+### Frontend Work
 
-- Production `docker-compose.prod.yml` with:
-  - `restart: unless-stopped` on all services
-  - No `ports` exposed for DB (internal network only)
-  - `DISABLE_DOCS=true` for backend
-  - `JWT_SECRET` sourced from environment (not hardcoded)
-- DB migration run as a one-shot init container before backend starts
-- All health checks passing before traffic is accepted
-- `NEXT_PUBLIC_SITE_URL` set to real production domain (Phase 17 prerequisite)
+**Replace static product data** — remove dependency on `data/products.ts`; replace static product information with API-driven data.
+
+**Live product fetching** — implement:
+
+- Product listing page
+- Product detail views
+- Category filtering
+- Search functionality
+
+**Cart integration upgrade** — update cart display to use backend product relationships. Cart items should display:
+
+- Product name
+- Product image
+- Product price
+- Quantity
+- Subtotal
+
+Correctly map:
+
+```
+Product UUID
+      |
+      v
+Backend Product
+      |
+      v
+Frontend Product Display
+```
+
+### Validation
+
+Confirm:
+
+- Products load from backend
+- Search/filtering works
+- Product UUID mapping is correct
+- Cart displays complete product information
+- Customer isolation remains intact
+- Admin product creation remains functional
+
+### Outcome
+
+Phase 16 completes the transition from a backend-enabled shopping cart into a complete product-driven ecommerce workflow.
+
+---
+
+> **Phase 17 — Final Production Polish + QA + Deploy Ready** and **Phase 18 —
+> VPS Deployment / DigitalOcean Production** are documented in
+> [`PHASES_17_18_ROADMAP_AND_TUTORIALS.md`](./PHASES_17_18_ROADMAP_AND_TUTORIALS.md),
+> split out to keep this document focused on application-development phases.
 
 ---
 
@@ -2489,7 +2528,7 @@ curl -s -o /dev/null -w "%{http_code}" http://localhost:3000
 
 # PART 3 — FINAL SAFETY GUARANTEE CHECKLIST
 
-Run this checklist against the live environment after each phase and again after Phase 16 validation.
+Run this checklist against the live environment after each phase and again after Phase 17 validation.
 
 ---
 
@@ -2586,4 +2625,4 @@ Run this checklist against the live environment after each phase and again after
 
 ---
 
-*Document version: Phase 14–16 initial release. Update this document at the start of Phase 17 (VPS Deployment) to reflect production environment specifics.*
+*Document version: Phase 14–16 release (Phases 17–18 split out to `PHASES_17_18_ROADMAP_AND_TUTORIALS.md`). Update this document at the start of Phase 16 (Product Catalog Integration) implementation.*
