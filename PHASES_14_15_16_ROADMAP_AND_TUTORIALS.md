@@ -997,6 +997,12 @@ Stop and flag any failure — do not proceed past a failure.
 
 ---
 
+### Deferred Features (Planned for Phase 15)
+
+Shopping cart functionality is intentionally excluded from Phase 14. This is a deliberate architectural decision: a cart requires an authenticated user context to associate items with a session or account, and session handling is not available until Phase 15 introduces JWT-based auth and RBAC. Implementing cart persistence before authentication would produce a throwaway data layer that would need to be replaced in its entirety one phase later. Cart endpoints, models, and frontend integration belong in Phase 15, after `User` authentication is in place.
+
+---
+
 ---
 
 ## Tutorial B — Authentication & RBAC (Phase 15)
@@ -1011,7 +1017,11 @@ Phase 15 adds JWT-based authentication and role-based access control to the exis
 
 ### STEP B-1 — Add Auth Dependencies
 
-**What this step does:** Adds `python-jose[cryptography]`, `passlib[bcrypt]`, and `pydantic[email]` to the backend. No application code changes yet.
+**What this step does:** Adds `python-jose[cryptography]` and `passlib[bcrypt]` to the backend, plus a compatibility pin for `bcrypt` itself (see below). No application code changes yet.
+
+**`pydantic[email]` is deliberately NOT re-added here:** it is already an unpinned requirement from Phase 10 (`requirements.txt` line 3), and `EmailStr` is already available and in use (`models/contact.py`, and Phase 14's `pip install` resolved it to `pydantic-2.13.4`). Re-adding it pinned to `==2.10.3` would silently *downgrade* an already-satisfied, newer dependency shared by every existing Pydantic model in the app — a real risk under this document's own "ZERO BREAKING CHANGES" constraint, for no benefit.
+
+**`bcrypt` is pinned explicitly below `passlib[bcrypt]`:** `passlib==1.7.4` (the latest release, effectively unmaintained since 2020) detects the installed `bcrypt` version via `bcrypt.__about__.__version__`. `bcrypt>=4.0` (a Rust-backed rewrite) removed that attribute entirely, so an unpinned install raises `AttributeError: module 'bcrypt' has no attribute '__about__'` at hashing time — breaking registration and login outright. Pinning `bcrypt==3.2.2` (last of the compatible 3.x line) avoids this.
 
 **Files to modify:** `fiddlers_green-backend/requirements.txt`
 
@@ -1022,15 +1032,20 @@ preserving all existing lines:
 
 python-jose[cryptography]==3.3.0
 passlib[bcrypt]==1.7.4
-pydantic[email]==2.10.3
+bcrypt==3.2.2
 
-Do not remove or modify any existing line.
+Do not remove or modify any existing line. Do not add a pydantic[email] line —
+it is already present, unpinned, from Phase 10.
 ```
 
 **Validation:**
 ```bash
 pip install -r fiddlers_green-backend/requirements.txt --break-system-packages
-python -c "from jose import jwt; from passlib.context import CryptContext; print('auth deps OK')"
+python -c "from jose import jwt; from passlib.context import CryptContext; \
+  ctx = CryptContext(schemes=['bcrypt']); h = ctx.hash('testpass'); \
+  assert ctx.verify('testpass', h); print('auth deps OK')"
+# The hash()/verify() round-trip catches the passlib/bcrypt incompatibility;
+# a bare import check does not, since the AttributeError only surfaces on first use.
 # Or rebuild Docker:
 docker compose build backend
 ```
@@ -1833,84 +1848,640 @@ curl -s http://localhost:3000
 
 ---
 
-### STEP B-12 — Final Phase 15 Validation
+### STEP B-12 — Create the CartItem DB Model
 
-**What this step does:** Full end-to-end smoke test of Phases 14 + 15 in a clean Docker environment.
+**What this step does:** Adds a `CartItem` SQLAlchemy model to `db_models/`. Each row ties one product (by UUID FK) to one user (by UUID FK) with a quantity. A CHECK constraint enforces `quantity >= 1` at the database level. The model is discovered by Alembic automatically because `db_models/__init__.py` imports it. Relationships are added to `User` and `Product` so SQLAlchemy can cascade deletes correctly.
+
+**Files to create:** `fiddlers_green-backend/db_models/cart.py`
+**Files to modify:** `fiddlers_green-backend/db_models/__init__.py`, `fiddlers_green-backend/db_models/user.py`, `fiddlers_green-backend/db_models/product.py`
 
 **Claude CLI prompt:**
 ```
-Run each of the following validation commands in order. Stop at any failure.
+Create fiddlers_green-backend/db_models/cart.py with exactly this content:
 
-# 1. Clean rebuild
+"""
+CartItem — one row per (user, product) pair in a user's active cart.
+Tied to authenticated users only: user_id is a required FK.
+Quantity is always >= 1; enforced by a DB-level CHECK constraint and at
+the repository layer.
+"""
+import uuid
+from datetime import datetime, timezone
+
+from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Integer
+from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+
+from database import Base
+
+
+class CartItem(Base):
+    __tablename__ = "cart_items"
+    __table_args__ = (
+        CheckConstraint("quantity >= 1", name="cart_items_quantity_positive"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    product_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("products.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    quantity: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    added_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc),
+    )
+
+    # Relationships (lazy-loaded by default)
+    user = relationship("User", back_populates="cart_items", lazy="select")
+    product = relationship("Product", back_populates="cart_items", lazy="select")
+
+
+Then open fiddlers_green-backend/db_models/__init__.py and add this import
+at the end of the file, after the existing three imports:
+
+from .cart import CartItem  # noqa: F401
+
+Then open fiddlers_green-backend/db_models/user.py and add this line
+inside the User class body, after the updated_at mapped_column declaration:
+
+    cart_items = relationship("CartItem", back_populates="user", cascade="all, delete-orphan")
+
+Then open fiddlers_green-backend/db_models/product.py and add this line
+inside the Product class body, after the updated_at mapped_column declaration:
+
+    cart_items = relationship("CartItem", back_populates="product", cascade="all, delete-orphan")
+
+Do not modify any other part of any file.
+```
+
+**Validation:**
+```bash
+cd fiddlers_green-backend
+python -c "from db_models.cart import CartItem; print('CartItem model OK')"
+python -c "from db_models import CartItem, User, Product; print('all models OK')"
+```
+
+**Success criteria:** Both import checks print without error.
+
+**Rollback:** Delete `db_models/cart.py`; remove the `CartItem` import from `db_models/__init__.py`; remove the `cart_items` relationship line from `db_models/user.py` and `db_models/product.py`.
+
+---
+
+### STEP B-13 — Generate and Apply the CartItem Migration
+
+**What this step does:** Generates an Alembic migration file that creates the `cart_items` table with the correct FK constraints and CHECK constraint, then applies it. The existing three tables are unaffected.
+
+**Claude CLI prompt:**
+```
+Ensure the Docker db container is running (docker compose up -d db).
+
+From inside fiddlers_green-backend/ (or via docker compose exec backend), run:
+
+  alembic revision --autogenerate -m "add_cart_items"
+
+Open the generated file in alembic/versions/ and verify it contains:
+- op.create_table("cart_items", ...) with columns: id, user_id, product_id, quantity, added_at
+- ForeignKeyConstraint referencing users.id with ondelete="CASCADE"
+- ForeignKeyConstraint referencing products.id with ondelete="CASCADE"
+- CheckConstraint("quantity >= 1", name="cart_items_quantity_positive")
+- An index on user_id
+- A downgrade() function containing op.drop_table("cart_items") only —
+  confirm it does NOT touch users, products, or contact_submissions
+
+If anything is missing, do not proceed — check that db_models/__init__.py imports CartItem.
+
+Then apply the migration:
+  alembic upgrade head
+  # Or inside Docker:
+  docker compose exec backend alembic upgrade head
+```
+
+**Validation:**
+```bash
+docker compose exec db psql -U fg_user -d fiddlers_green -c "\dt"
+# cart_items must appear alongside the existing tables
+
+docker compose exec db psql -U fg_user -d fiddlers_green -c "\d cart_items"
+# Verify columns, FK references, and the quantity CHECK constraint
+
+curl -s http://localhost:8000/health
+# Must still return {"status":"ok"} — unchanged
+```
+
+**Success criteria:**
+- `cart_items` table exists with correct columns, FKs, and CHECK constraint
+- All existing tables and endpoints are unchanged
+
+**Rollback:**
+```bash
+docker compose exec backend alembic downgrade -1
+# Drops cart_items table only; existing tables are unaffected
+```
+
+---
+
+### STEP B-14 — Create the Cart Repository
+
+**What this step does:** Creates `fiddlers_green-backend/repositories/cart.py` — all DB operations for the cart. Routes call only these typed async functions; raw SQL never appears in route handlers.
+
+Three rules enforced here: (1) quantity must be ≥ 1, (2) adding an item that already exists increments quantity rather than creating a duplicate row, (3) removing an item not in the cart is a silent no-op (idempotent).
+
+**Files to create:** `fiddlers_green-backend/repositories/cart.py`
+
+**Claude CLI prompt:**
+```
+Create fiddlers_green-backend/repositories/cart.py with exactly this content:
+
+"""
+Data access layer for CartItem.
+All cart DB operations go through this module — no raw SQL in routes.
+
+Rules enforced here:
+  - quantity must be >= 1 (validated before write)
+  - adding an item already in the cart increments its quantity
+  - removing an item not in the cart is a silent no-op (idempotent)
+"""
+import uuid
+import logging
+from typing import List
+
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from db_models.cart import CartItem
+from db_models.product import Product
+
+logger = logging.getLogger(__name__)
+
+
+async def get_cart(session: AsyncSession, user_id: uuid.UUID) -> List[CartItem]:
+    """Returns all active cart items for a user, ordered by time added."""
+    result = await session.execute(
+        select(CartItem)
+        .where(CartItem.user_id == user_id)
+        .order_by(CartItem.added_at)
+    )
+    return list(result.scalars().all())
+
+
+async def add_to_cart(
+    session: AsyncSession,
+    user_id: uuid.UUID,
+    product_id: uuid.UUID,
+    quantity: int = 1,
+) -> CartItem:
+    """
+    Adds a product to the cart. If the product is already present,
+    increments quantity rather than inserting a duplicate row.
+    Raises ValueError if the product does not exist, is inactive, or quantity < 1.
+    """
+    if quantity < 1:
+        raise ValueError("Quantity must be at least 1.")
+
+    # Verify the product exists and is active
+    product = await session.get(Product, product_id)
+    if product is None or not product.is_active:
+        raise ValueError(f"Product {product_id} not found or is unavailable.")
+
+    # Check for an existing row for this user + product pair
+    result = await session.execute(
+        select(CartItem).where(
+            CartItem.user_id == user_id,
+            CartItem.product_id == product_id,
+        )
+    )
+    existing = result.scalar_one_or_none()
+
+    if existing:
+        existing.quantity += quantity
+        await session.commit()
+        await session.refresh(existing)
+        logger.info(
+            "Cart item quantity updated: user=%s product=%s new_qty=%s",
+            user_id, product_id, existing.quantity,
+        )
+        return existing
+
+    item = CartItem(user_id=user_id, product_id=product_id, quantity=quantity)
+    session.add(item)
+    await session.commit()
+    await session.refresh(item)
+    logger.info("Cart item added: user=%s product=%s qty=%s", user_id, product_id, quantity)
+    return item
+
+
+async def remove_from_cart(
+    session: AsyncSession,
+    user_id: uuid.UUID,
+    product_id: uuid.UUID,
+) -> bool:
+    """
+    Removes a product from the cart entirely (regardless of quantity).
+    Returns True if a row was deleted, False if it was not present.
+    """
+    result = await session.execute(
+        select(CartItem).where(
+            CartItem.user_id == user_id,
+            CartItem.product_id == product_id,
+        )
+    )
+    item = result.scalar_one_or_none()
+    if item is None:
+        return False
+    await session.delete(item)
+    await session.commit()
+    logger.info("Cart item removed: user=%s product=%s", user_id, product_id)
+    return True
+```
+
+**Validation:**
+```bash
+cd fiddlers_green-backend
+python -c "from repositories.cart import get_cart, add_to_cart, remove_from_cart; print('cart repo OK')"
+```
+
+**Success criteria:** Prints `cart repo OK`.
+
+**Rollback:** Delete `fiddlers_green-backend/repositories/cart.py`.
+
+---
+
+### STEP B-15 — Create Cart Pydantic Schemas
+
+**What this step does:** Creates `fiddlers_green-backend/models/cart.py` — API request and response shapes for all three cart endpoints. A `field_validator` on `CartAddRequest` mirrors the repository-level quantity check so invalid requests are rejected before touching the DB. No existing Pydantic models are changed.
+
+**Files to create:** `fiddlers_green-backend/models/cart.py`
+
+**Claude CLI prompt:**
+```
+Create fiddlers_green-backend/models/cart.py with exactly this content:
+
+"""
+Pydantic schemas for cart endpoints.
+API contract — do not rename fields without a versioning plan.
+"""
+import uuid
+from datetime import datetime
+
+from pydantic import BaseModel, field_validator
+
+
+class CartAddRequest(BaseModel):
+    product_id: uuid.UUID
+    quantity: int = 1
+
+    @field_validator("quantity")
+    @classmethod
+    def quantity_positive(cls, v: int) -> int:
+        if v < 1:
+            raise ValueError("Quantity must be at least 1.")
+        return v
+
+
+class CartRemoveRequest(BaseModel):
+    product_id: uuid.UUID
+
+
+class CartItemResponse(BaseModel):
+    id: uuid.UUID
+    product_id: uuid.UUID
+    quantity: int
+    added_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class CartResponse(BaseModel):
+    items: list[CartItemResponse]
+    total_items: int  # sum of all quantities across all line items
+
+    @classmethod
+    def from_items(cls, items: list) -> "CartResponse":
+        return cls(
+            items=[CartItemResponse.model_validate(i) for i in items],
+            total_items=sum(i.quantity for i in items),
+        )
+```
+
+**Validation:**
+```bash
+python -c "from models.cart import CartAddRequest, CartResponse, CartItemResponse; print('cart models OK')"
+```
+
+**Success criteria:** Prints `cart models OK`.
+
+**Rollback:** Delete `fiddlers_green-backend/models/cart.py`.
+
+---
+
+### STEP B-16 — Create the Cart Router
+
+**What this step does:** Creates `fiddlers_green-backend/routes/cart.py` — three endpoints (`GET /cart`, `POST /cart/add`, `DELETE /cart/remove`). All three require a valid customer or admin token via `Depends(require_customer)`. No cross-user access is possible: the authenticated user's `id` is always read from the verified token, never from the request body. No existing routes are modified.
+
+**Files to create:** `fiddlers_green-backend/routes/cart.py`
+
+**Claude CLI prompt:**
+```
+Create fiddlers_green-backend/routes/cart.py with exactly this content:
+
+"""
+Shopping cart endpoints — all require authentication.
+Customers and admins can both access and modify their own cart.
+Cart ownership is enforced by the token: user_id comes from the verified
+JWT, never from the request body, so cross-user access is impossible.
+"""
+import logging
+
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from database import get_db
+from db_models.user import User
+from dependencies.auth import require_customer
+from models.cart import CartAddRequest, CartRemoveRequest, CartResponse
+from repositories.cart import add_to_cart, get_cart, remove_from_cart
+
+logger = logging.getLogger(__name__)
+
+router = APIRouter(prefix="/cart", tags=["cart"])
+
+
+@router.get("", response_model=CartResponse)
+async def view_cart(
+    current_user: User = Depends(require_customer),
+    db: AsyncSession = Depends(get_db),
+) -> CartResponse:
+    """Returns the authenticated user's current cart."""
+    items = await get_cart(session=db, user_id=current_user.id)
+    return CartResponse.from_items(items)
+
+
+@router.post("/add", response_model=CartResponse, status_code=status.HTTP_200_OK)
+async def add_item(
+    request: CartAddRequest,
+    current_user: User = Depends(require_customer),
+    db: AsyncSession = Depends(get_db),
+) -> CartResponse:
+    """
+    Adds a product to the cart, or increments quantity if already present.
+    Returns the updated full cart.
+    """
+    try:
+        await add_to_cart(
+            session=db,
+            user_id=current_user.id,
+            product_id=request.product_id,
+            quantity=request.quantity,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    items = await get_cart(session=db, user_id=current_user.id)
+    return CartResponse.from_items(items)
+
+
+@router.delete("/remove", response_model=CartResponse)
+async def remove_item(
+    request: CartRemoveRequest,
+    current_user: User = Depends(require_customer),
+    db: AsyncSession = Depends(get_db),
+) -> CartResponse:
+    """
+    Removes a product from the cart entirely, regardless of quantity.
+    Idempotent — removing an item not in the cart returns the unchanged cart.
+    """
+    await remove_from_cart(
+        session=db,
+        user_id=current_user.id,
+        product_id=request.product_id,
+    )
+    items = await get_cart(session=db, user_id=current_user.id)
+    return CartResponse.from_items(items)
+```
+
+**Validation:**
+```bash
+python -c "from routes.cart import router; print('cart router OK')"
+```
+
+**Success criteria:** Prints `cart router OK`.
+
+**Rollback:** Delete `fiddlers_green-backend/routes/cart.py`.
+
+---
+
+### STEP B-17 — Register the Cart Router in main.py
+
+**What this step does:** Registers the cart router with the FastAPI app. Same minimal, additive pattern as Steps B-8 and B-11 — two lines added, nothing else changed.
+
+**Files to modify:** `fiddlers_green-backend/main.py`
+
+**Claude CLI prompt:**
+```
+Read fiddlers_green-backend/main.py.
+
+Make exactly these changes and no others:
+
+1. After the existing "from routes.customer import router as customer_router" line, add:
+   from routes.cart import router as cart_router
+
+2. After "app.include_router(customer_router)", add:
+   app.include_router(cart_router)
+
+Do not modify any other line.
+```
+
+**Validation:**
+```bash
+docker compose up --build -d
+sleep 5
+
+# Existing endpoints still work
+curl -s http://localhost:8000/health
+# Expected: {"status":"ok"}
+
+# Cart requires auth — unauthenticated access returns 403
+curl -s -o /dev/null -w "%{http_code}" http://localhost:8000/cart
+# Expected: 403
+
+# Register and login a test user
+curl -s -X POST http://localhost:8000/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{"email":"carttest@example.com","password":"CartPass123"}'
+
+CART_TOKEN=$(curl -s -X POST http://localhost:8000/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"carttest@example.com","password":"CartPass123"}' \
+  | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
+
+# View an empty cart
+curl -s http://localhost:8000/cart \
+  -H "Authorization: Bearer $CART_TOKEN" | python3 -m json.tool
+# Expected: {"items": [], "total_items": 0}
+
+# Frontend unchanged
+curl -s -o /dev/null -w "%{http_code}" http://localhost:3000
+# Expected: 200
+```
+
+**Success criteria:**
+- All existing endpoints return identical responses
+- Unauthenticated `GET /cart` returns 403
+- Authenticated `GET /cart` returns `{"items": [], "total_items": 0}` for a new user
+- Frontend loads normally
+
+**Rollback:** Remove the `cart_router` import and `include_router` call from `main.py`. Delete `routes/cart.py`.
+
+---
+
+### STEP B-18 — Final Phase 15 Validation
+
+**What this step does:** Full end-to-end smoke test of Phases 14 + 15 — including auth, RBAC, and shopping cart — in a clean Docker environment. Every check must pass before Phase 15 is considered complete.
+
+**Claude CLI prompt:**
+```
+Run each of the following validation commands in order. Stop and flag any failure.
+
+# 1. Clean rebuild from scratch
 docker compose down -v && docker compose up --build -d
 sleep 20
 
-# 2. All containers healthy
+# 2. All three containers healthy
 docker compose ps
 
 # 3. Existing endpoints unchanged
 curl -s http://localhost:8000/health
+# Expected: {"status":"ok"}
+
 curl -s -X POST http://localhost:8000/contact \
   -H "Content-Type: application/json" \
   -d '{"name":"Final Test","email":"final@test.com","message":"Phase 15 validation","inquiry_type":"general"}'
+# Expected: {"ok": true, ...}
+
 curl -s -X POST http://localhost:8000/chat \
   -H "Content-Type: application/json" \
   -d '{"message":"What gummies do you carry?"}'
+# Expected: {"reply": "..."} — non-empty AI reply
 
-# 4. Frontend still loads
+# 4. Frontend loads
 curl -s -o /dev/null -w "%{http_code}" http://localhost:3000
 # Expected: 200
 
-# 5. Register a customer
+# 5. Register a customer account
 curl -s -X POST http://localhost:8000/auth/register \
   -H "Content-Type: application/json" \
   -d '{"email":"val_customer@test.com","password":"CustomerPass1"}'
+# Expected: user object with role "customer"
 
-# 6. Login as customer — capture token
+# 6. Login and capture customer token
 CUST_TOKEN=$(curl -s -X POST http://localhost:8000/auth/login \
   -H "Content-Type: application/json" \
   -d '{"email":"val_customer@test.com","password":"CustomerPass1"}' \
   | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
-echo "Customer token: $CUST_TOKEN"
+echo "Customer token acquired: ${CUST_TOKEN:0:20}..."
 
-# 7. Customer me
+# 7. Customer /auth/me
 curl -s http://localhost:8000/auth/me \
   -H "Authorization: Bearer $CUST_TOKEN" | python3 -m json.tool
+# Expected: {"id":"...","email":"val_customer@test.com","role":"customer",...}
 
 # 8. Customer cannot access admin routes
 curl -s -o /dev/null -w "%{http_code}" http://localhost:8000/admin/products \
   -H "Authorization: Bearer $CUST_TOKEN"
 # Expected: 403
 
-# 9. Promote user to admin and re-login
+# 9. Promote to admin and re-login
 docker compose exec db psql -U fg_user -d fiddlers_green -c \
   "UPDATE users SET role='admin' WHERE email='val_customer@test.com';"
 ADMIN_TOKEN=$(curl -s -X POST http://localhost:8000/auth/login \
   -H "Content-Type: application/json" \
   -d '{"email":"val_customer@test.com","password":"CustomerPass1"}' \
   | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
+echo "Admin token acquired: ${ADMIN_TOKEN:0:20}..."
 
-# 10. Admin CRUD
-curl -s -X POST http://localhost:8000/admin/products \
+# 10. Admin creates a product (required for cart test)
+PRODUCT_ID=$(curl -s -X POST http://localhost:8000/admin/products \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
-  -d '{"name":"Validation Gummy","category":"gummies"}' | python3 -m json.tool
+  -d '{"name":"Validation Gummy","category":"gummies","pricing":"$30","description":"Phase 15 test product"}' \
+  | python3 -c "import sys,json; print(json.load(sys.stdin)['id'])")
+echo "Created product ID: $PRODUCT_ID"
 
+# 11. Confirm product appears in admin list
 curl -s http://localhost:8000/admin/products \
   -H "Authorization: Bearer $ADMIN_TOKEN" | python3 -m json.tool
+# Expected: array containing the product just created
 
-# 11. DB sanity
+# 12. Register a dedicated cart test user
+curl -s -X POST http://localhost:8000/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{"email":"cart_val@test.com","password":"CartPass123"}'
+CART_TOKEN=$(curl -s -X POST http://localhost:8000/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"cart_val@test.com","password":"CartPass123"}' \
+  | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
+echo "Cart user token acquired: ${CART_TOKEN:0:20}..."
+
+# 13. View empty cart
+curl -s http://localhost:8000/cart \
+  -H "Authorization: Bearer $CART_TOKEN" | python3 -m json.tool
+# Expected: {"items": [], "total_items": 0}
+
+# 14. Add product to cart (quantity: 2)
+curl -s -X POST http://localhost:8000/cart/add \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $CART_TOKEN" \
+  -d "{\"product_id\": \"$PRODUCT_ID\", \"quantity\": 2}" | python3 -m json.tool
+# Expected: {"items": [{"id":"...","product_id":"...","quantity":2,"added_at":"..."}], "total_items": 2}
+
+# 15. Add same product again — quantity must increment, not duplicate
+curl -s -X POST http://localhost:8000/cart/add \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $CART_TOKEN" \
+  -d "{\"product_id\": \"$PRODUCT_ID\", \"quantity\": 1}" | python3 -m json.tool
+# Expected: total_items: 3, items still has exactly 1 row
+
+# 16. Remove product from cart
+curl -s -X DELETE http://localhost:8000/cart/remove \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $CART_TOKEN" \
+  -d "{\"product_id\": \"$PRODUCT_ID\"}" | python3 -m json.tool
+# Expected: {"items": [], "total_items": 0}
+
+# 17. Unauthenticated cart access is rejected
+curl -s -o /dev/null -w "%{http_code}" http://localhost:8000/cart
+# Expected: 403
+
+# 18. DB sanity — confirm all tables and expected rows
+docker compose exec db psql -U fg_user -d fiddlers_green -c "\dt"
+# Expected: alembic_version, cart_items, contact_submissions, products, users
+
 docker compose exec db psql -U fg_user -d fiddlers_green -c \
-  "SELECT email, role FROM users; SELECT name, category FROM products; SELECT email FROM contact_submissions LIMIT 3;"
+  "SELECT email, role FROM users ORDER BY created_at;"
+docker compose exec db psql -U fg_user -d fiddlers_green -c \
+  "SELECT name, category, is_active FROM products;"
+docker compose exec db psql -U fg_user -d fiddlers_green -c \
+  "SELECT COUNT(*) AS cart_rows FROM cart_items;"
+# Expected: 0 (item was removed in step 16)
 
-# 12. No-token access to public routes
+# 19. Public routes require no auth and are unchanged
 curl -s -o /dev/null -w "%{http_code}" http://localhost:8000/health
 # Expected: 200
 curl -s -o /dev/null -w "%{http_code}" http://localhost:3000
 # Expected: 200
 ```
 
-**Success criteria:** All 12 steps produce expected output. Phases 14 and 15 are complete.
+**Success criteria:** All 19 steps produce expected output. Phases 14 and 15, including the shopping cart, are complete.
 
 ---
 
@@ -1957,16 +2528,29 @@ Run this checklist against the live environment after each phase and again after
 
 - [ ] `POST /auth/register` creates a customer account with role `customer`
 - [ ] `POST /auth/login` returns a valid JWT for both admin and customer accounts
-- [ ] `GET /auth/me` returns user info with a valid token; returns 401 without one
-- [ ] `GET /admin/products` returns 401 with no token
-- [ ] `GET /admin/products` returns 403 with a customer token
+- [ ] `GET /auth/me` returns user info with a valid token; returns 403 without one (FastAPI's `HTTPBearer(auto_error=True)` rejects a *missing* Authorization header with 403, before `get_current_user` ever runs)
+- [ ] `GET /admin/products` returns 403 with no token (same `HTTPBearer` behavior as above — not 401; 401 is reserved for a present-but-invalid/expired token, raised manually inside `get_current_user`)
+- [ ] `GET /admin/products` returns 403 with a customer token (correct role, wrong permission — `require_admin`'s own check)
 - [ ] `GET /admin/products` returns 200 with an admin token
 - [ ] `POST /admin/products` creates a product that is visible to `GET /admin/products`
 - [ ] `PUT /admin/products/{id}` updates product fields correctly
 - [ ] `DELETE /admin/products/{id}` sets `is_active=false` (soft delete); product still exists in DB
 - [ ] `GET /customer/me` returns user profile with a valid customer token
 - [ ] `GET /customer/orders` returns `[]` (empty array — scaffolded)
-- [ ] All `/admin/*` and `/customer/*` routes return 401 for expired or malformed tokens
+- [ ] All `/admin/*` and `/customer/*` routes return 401 for a syntactically valid but expired/invalid-signature/unknown-user Bearer token; 403 for a missing Authorization header or a non-Bearer scheme
+
+## Shopping Cart
+
+- [ ] `GET /cart` returns 403 without a token
+- [ ] `GET /cart` returns `{"items": [], "total_items": 0}` for a newly registered user with no items
+- [ ] `POST /cart/add` with a valid product ID adds the item and returns the updated cart
+- [ ] `POST /cart/add` for the same product a second time increments the quantity (no duplicate row)
+- [ ] `DELETE /cart/remove` removes the product; subsequent `GET /cart` returns empty
+- [ ] `DELETE /cart/remove` for a product not in the cart returns the unchanged cart (idempotent)
+- [ ] `cart_items` table exists in the database with FK constraints on `users.id` and `products.id`
+- [ ] The `quantity >= 1` CHECK constraint is present on `cart_items`
+- [ ] Cart items are user-scoped: a token for user A cannot read or modify user B's cart
+- [ ] `alembic upgrade head` is idempotent across clean rebuilds (`docker compose down -v && up --build`)
 
 ## Public Access Unchanged
 
