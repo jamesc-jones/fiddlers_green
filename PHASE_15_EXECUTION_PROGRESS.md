@@ -150,9 +150,32 @@ Step titles below are copied verbatim from that document's `### STEP B-N` headin
   Not yet migrated — B-13 generates and applies the actual Alembic migration for the
   new `cart_items` table; the model exists in Python only until then.
 
+- [x] B-13 — Generate and Apply the CartItem Migration
+  Commit: `c8db08b`
+  Migration file: `alembic/versions/65be7bc486c3_add_cart_items.py`
+  (`down_revision = '483f420bc9c8'`, correctly chains onto the existing Phase 14 head,
+  no branching).
+  Validation: `\dt` shows `cart_items` alongside the existing 3 tables +
+  `alembic_version`; `\d cart_items` confirms all 5 columns, both FKs (`ON DELETE
+  CASCADE` to `users`/`products`), the `cart_items_quantity_positive` CHECK constraint,
+  and the `ix_cart_items_user_id` index; `alembic current` → `65be7bc486c3 (head)`;
+  `/health` unchanged.
+  Deviation found and fixed before generating the migration: the `backend` service in
+  `docker-compose.yml` has no bind mount (`build:` only, no `volumes:`), so the running
+  container was still on the image built during B-11's validation — it did not contain
+  B-12's `db_models/cart.py` at all (`docker compose exec backend test -f
+  db_models/cart.py` failed). Autogenerating against that stale image would have missed
+  `CartItem` entirely. Fixed by running `docker compose up --build -d backend` before
+  `alembic revision --autogenerate` — confirmed the file was present in the container
+  afterward. Not a workaround; the tutorial's B-13 prompt implicitly assumes the image
+  already reflects the latest code, which doesn't hold here without a rebuild step.
+  Alembic commands run via `docker compose exec backend`, per the Phase 14 precedent
+  (the `db` service's port isn't published to the host — confirmed via `docker compose
+  ps` showing `5432/tcp` with no host-side mapping).
+
 ## Pending
 
-- [ ] B-13 — Generate and Apply the CartItem Migration
+- [ ] B-14 — Create the Cart Repository
 - [ ] B-14 — Create the Cart Repository
 - [ ] B-15 — Create Cart Pydantic Schemas
 - [ ] B-16 — Create the Cart Router
