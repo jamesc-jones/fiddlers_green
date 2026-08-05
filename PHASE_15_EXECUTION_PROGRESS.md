@@ -51,9 +51,17 @@ Step titles below are copied verbatim from that document's `### STEP B-N` headin
   `password_hash`, `role` fields matching this repository's usage exactly (scaffolded
   in Phase 14, unmodified here).
 
+- [x] B-5 — Create Auth Pydantic Schemas
+  Commit: `bd1e239`
+  Validation: `python -c "from models.auth import RegisterRequest, LoginRequest, TokenResponse; print('auth models OK')"`
+  printed `auth models OK` via the backend's `.venv` interpreter, no warnings (module
+  has no `.env`-dependent state, unlike auth_service/user repository).
+  Verified before writing: `EmailStr` support confirmed present (`email_validator`
+  importable), Pydantic 2.13.4 in use; `models/contact.py` and `models/chat.py`
+  unchanged.
+
 ## Pending
 
-- [ ] B-5 — Create Auth Pydantic Schemas
 - [ ] B-6 — Create FastAPI Auth Dependencies
 - [ ] B-7 — Create the Auth Router
 - [ ] B-8 — Register the Auth Router in main.py
