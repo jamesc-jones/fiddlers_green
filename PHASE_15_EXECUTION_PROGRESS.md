@@ -242,7 +242,7 @@ Step titles below are copied verbatim from that document's `### STEP B-N` headin
   that same allowance.
 
 - [x] B-18 — Final Phase 15 Validation
-  Commit: (pending — filled in after commit)
+  Commit: `8e42978`
   Full clean-room validation: `docker compose down -v && docker compose up --build -d`
   (wipes the Postgres volume — all prior manual test data destroyed and DB rebuilt from
   an empty state). All 3 containers (`db`, `backend`, `frontend`) healthy. Migration
