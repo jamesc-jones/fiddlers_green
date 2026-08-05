@@ -182,9 +182,20 @@ Step titles below are copied verbatim from that document's `### STEP B-N` headin
   exactly (session → commit → refresh → log). Not wired into any route yet — that's
   B-16.
 
+- [x] B-15 — Create Cart Pydantic Schemas
+  Commit: `643b503`
+  Validation: `python -c "from models.cart import CartAddRequest, CartResponse, CartItemResponse; print('cart models OK')"`
+  printed `cart models OK` via the backend's `.venv` interpreter, no warnings (matches
+  B-5's no-env-dependency pattern). Extra check: confirmed `CartAddRequest`'s
+  `quantity_positive` field_validator correctly raises `ValidationError` on
+  `quantity=0`, mirroring B-14's repository-level check and the B-13 DB-level
+  `CHECK (quantity >= 1)` constraint — three layers now enforce the same invariant.
+  Verified before writing: `models/chat.py` confirms the plain-`BaseModel` convention
+  this file follows; no existing model file modified.
+
 ## Pending
 
-- [ ] B-15 — Create Cart Pydantic Schemas
+- [ ] B-16 — Create the Cart Router
 - [ ] B-16 — Create the Cart Router
 - [ ] B-17 — Register the Cart Router in main.py
 - [ ] B-18 — Final Phase 15 Validation
