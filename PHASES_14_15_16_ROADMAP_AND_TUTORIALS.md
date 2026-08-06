@@ -1,6 +1,6 @@
 # Fiddler's Green — Phases 14–16: Roadmap & Claude CLI Implementation Tutorials
 
-> **Status of existing phases:** Phases 1–13 complete and validated. Phase 16 (Product Catalog Integration) is not started.
+> **Status of existing phases:** Phases 1–13 complete and validated. Phase 16 (Product Catalog Integration) is complete via Phase 16.1 (Catalog Cart Integration) and Phase 16.2 (Gummy Variant Cart Integration); the remaining original Phase 16 scope — replacing the static frontend catalog with a fully backend-driven one — is deferred to Phase 16.3 (Backend-Driven Catalog Migration), not started. See [Phase 16 Completion Status](#phase-16-completion-status) below.
 > This document covers the application-development phases — Database Integration, Authentication & RBAC, and Product Catalog Integration — and provides step-by-step Claude CLI tutorials for Phases 14 and 15. The production-focused phases that follow (Final Production Polish + QA, and VPS Deployment) have moved to [`PHASES_17_18_ROADMAP_AND_TUTORIALS.md`](./PHASES_17_18_ROADMAP_AND_TUTORIALS.md).
 > Phase 15.1 (Frontend Authentication UI Integration) is documented separately in `PHASE_15_1_AUTH_UI_INTEGRATION.md`, not in this file.
 
@@ -21,6 +21,8 @@
 1. [Phase 14 — Database Integration](#phase-14--database-integration)
 2. [Phase 15 — Authentication & RBAC](#phase-15--authentication--role-based-access-control-rbac)
 3. [Phase 16 — Product Catalog Integration](#phase-16--product-catalog-integration)
+   - [Phase 16 Completion Status](#phase-16-completion-status)
+   - [Phase 16.3 — Backend-Driven Catalog Migration](#phase-163--backend-driven-catalog-migration)
 4. [Tutorial A — Database Integration (Phase 14)](#tutorial-a--database-integration-phase-14)
 5. [Tutorial B — Authentication & RBAC (Phase 15)](#tutorial-b--authentication--rbac-phase-15)
 6. [Final Safety Guarantee Checklist](#final-safety-guarantee-checklist)
@@ -224,8 +226,10 @@ The frontend continues to work exactly as it does after Phase 13 throughout all 
 
 ## Phase 16 — Product Catalog Integration
 
-**Status: NOT STARTED**
+**Status: COMPLETE via Phase 16.1 + Phase 16.2 — see [Phase 16 Completion Status](#phase-16-completion-status) below.**
 **Prerequisite:** Phase 15 complete and validated.
+
+> **Note (post-implementation):** Phase 16 was delivered across two focused sub-phases (16.1, 16.2) rather than the single pass originally spec'd below. This kept each change small and independently validated instead of touching products, catalog, cart, gummy variants, admin, and frontend rendering all at once. The sub-phases fully satisfy the cart-integration goals of this section; the catalog-data-architecture goals (removing `data/products.ts`, backend-driven images, live product listing/detail pages, search) were consciously deferred to Phase 16.3 rather than attempted alongside the cart work. The original spec below is left intact for historical reference.
 
 ### Objective
 
@@ -306,6 +310,128 @@ Confirm:
 ### Outcome
 
 Phase 16 completes the transition from a backend-enabled shopping cart into a complete product-driven ecommerce workflow.
+
+---
+
+### Phase 16 Completion Status
+
+#### Completed
+
+**Phase 16.1 — Catalog Cart Integration**
+
+- ✅ CartContext integration
+- ✅ Backend product matching
+- ✅ Flower/Hash/Gummy catalog cart support
+- ✅ Customer cart visibility
+- ✅ Fail-closed catalog behavior
+
+**Phase 16.2 — Gummy Variant Cart Integration**
+
+- ✅ Configurable gummy resolution
+- ✅ Entry option + strength mapping
+- ✅ Backend Product UUID resolution
+- ✅ Cart integration
+- ✅ Quantity management
+- ✅ Admin management support
+
+#### Deferred to Phase 16.3
+
+**Backend-Driven Catalog Migration** — see [Phase 16.3](#phase-163--backend-driven-catalog-migration) below for full scope. In short: the frontend catalog (`data/products.ts`) is still the source of truth for what renders; the backend `Product` table is joined to it only for cart purposes. Product images, live product listing/detail pages, and search were never implemented at the backend-data level. None of this blocks Phase 17 — it's tracked, not required.
+
+```
+Current:
+
+Frontend Static Catalog
+        |
+        v
+Backend Product Matching
+        |
+        v
+Cart
+
+Future (Phase 16.3):
+
+Backend Product API
+        |
+        v
+Frontend Catalog Rendering
+        |
+        v
+Cart
+```
+
+#### Why this phased approach was the better engineering choice
+
+The current implementation has a stable foundation:
+
+```
+Backend Product
+        |
+        v
+CartItem
+        |
+        v
+Customer Cart
+```
+
+Attempting the full catalog migration first would have meant changing products, catalog, cart, gummy variants, admin, and frontend rendering all simultaneously. Splitting the work into 16.1 → 16.2 → (deferred) 16.3 reduced risk at each step and kept every change independently testable, at the cost of temporarily leaving the catalog's data architecture unmigrated. That tradeoff is accepted; it does not need to be revisited before Phase 17.
+
+---
+
+## Phase 16.3 — Backend-Driven Catalog Migration
+
+**Status: NOT STARTED**
+**Prerequisite:** Phase 16.1 and Phase 16.2 complete and validated (they are).
+
+### Objective
+
+Replace the frontend's static product data (`data/products.ts`) with a fully backend-driven catalog, closing the remaining gap between this document's original Phase 16 spec and what 16.1/16.2 actually delivered (a cart integration layered on top of the static catalog, not a replacement of it).
+
+### Backend Work
+
+Extend `Product`:
+
+```
+Product
+---------
+id
+name
+category
+description
+price
+image_url
+dosage
+variant_option
+is_active
+```
+
+Support:
+
+- Product images (`image_url`, default placeholder image, CDN-compatible URL shape)
+- Product metadata needed for listing/detail views
+- Backend-owned categories (categories currently exist only as a `String` field with no dedicated table or validation)
+
+### Frontend Work
+
+Replace `data/products.ts` with live `GET /products` calls end-to-end:
+
+- Catalog listing driven entirely by the API (not cross-referenced against a static list)
+- Category filtering via the API's existing `category` query param
+- Product cards and product detail pages rendering backend-supplied fields, including images
+- Search, using the API's existing `search` query param (already implemented server-side, never wired to any UI)
+
+### Validation
+
+Confirm:
+
+- Catalog renders identically (or intentionally better, e.g. real images) with `data/products.ts` deleted
+- Search and category filtering work end-to-end from the UI
+- Cart, admin CRUD, and RBAC are unaffected (the `Product` → `CartItem` relationship established in Phase 16.1/16.2 does not change)
+- No regression in gummy configuration products (Phase 16.2's `variant_option`/`dosage` fields carry forward unchanged)
+
+### Outcome
+
+Phase 16.3 completes the original Phase 16 objective — a fully backend-driven product catalog — on top of the cart foundation Phase 16.1/16.2 already established, without having risked that foundation by attempting both at once.
 
 ---
 
