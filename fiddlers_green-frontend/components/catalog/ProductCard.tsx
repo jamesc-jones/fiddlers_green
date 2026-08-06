@@ -1,13 +1,17 @@
 import Image from "next/image";
 import type { Product } from "@/data/products";
 import CategoryEffect from "@/components/catalog/CategoryEffect";
+import CatalogProductActions from "@/components/catalog/CatalogProductActions";
+import type { PublicProduct } from "@/components/catalog/InteractiveCatalog";
 
 export default function ProductCard({
   product,
   priority = false,
+  backendProducts,
 }: {
   product: Product;
   priority?: boolean;
+  backendProducts: PublicProduct[] | null;
 }) {
   return (
     <div className="group flex flex-col">
@@ -36,6 +40,7 @@ export default function ProductCard({
         <h3 className="mt-1 font-display text-xl md:text-2xl text-brand-cream">
           {product.name}
         </h3>
+        <CatalogProductActions staticProduct={product} backendProducts={backendProducts} />
       </div>
     </div>
   );

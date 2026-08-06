@@ -1,85 +1,27 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useState } from "react";
 import { useRequireAuth } from "@/hooks/useRequireAuth";
-import { deleteJson, getJson, postJson } from "@/lib/api";
+import { useCart } from "@/contexts/CartContext";
 import ProductListing from "@/components/cart/ProductListing";
-
-interface CartItem {
-  id: string;
-  product_id: string;
-  product_name: string;
-  product_category: string;
-  // Backend serializes Decimal as a string (e.g. "15.00"), not a JSON
-  // number, to avoid float precision loss — confirmed against the live
-  // API, not assumed.
-  product_price: string | null;
-  quantity: number;
-  added_at: string;
-}
-
-interface CartResponse {
-  items: CartItem[];
-  total_items: number;
-  total_price: string | null;
-}
 
 function formatCurrency(value: number): string {
   return `$${value.toFixed(2)}`;
 }
 
 export default function CartView() {
-  const { token, isLoading, isAllowed } = useRequireAuth();
-
-  const [cart, setCart] = useState<CartResponse | null>(null);
+  const { isLoading: authLoading, isAllowed } = useRequireAuth();
+  const { cart, addToCart, updateQuantity, removeFromCart } = useCart();
   const [error, setError] = useState("");
 
-  const refreshCart = useCallback(async () => {
-    if (!token) return;
-    const data = await getJson<CartResponse>("/cart", token);
-    setCart(data);
-  }, [token]);
-
-  useEffect(() => {
-    if (isAllowed && token) {
-      // Loading the cart on mount is a one-time sync with the backend, not
-      // an event — react-hooks/set-state-in-effect's stricter reading of
-      // this pattern doesn't have a non-effect alternative here without
-      // pulling in a data-fetching library, which is out of scope.
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      refreshCart().catch(() =>
-        setError("Could not load your cart. Please try again.")
-      );
-    }
-  }, [isAllowed, token, refreshCart]);
-
-  async function handleAddProduct(productId: string) {
-    if (!token) return;
+  function handleAction(promise: Promise<void>) {
     setError("");
-    const data = await postJson<CartResponse>(
-      "/cart/add",
-      { product_id: productId, quantity: 1 },
-      token
+    promise.catch((err) =>
+      setError(err instanceof Error ? err.message : "Could not update cart.")
     );
-    setCart(data);
   }
 
-  async function handleRemove(itemProductId: string) {
-    if (!token) return;
-    setError("");
-    try {
-      const data = await deleteJson<CartResponse>(
-        "/cart/remove",
-        { product_id: itemProductId },
-        token
-      );
-      setCart(data);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not remove item.");
-    }
-  }
-
-  if (isLoading || !isAllowed) {
+  if (authLoading || !isAllowed) {
     return (
       <p className="font-body text-brand-smoke text-center">Loading...</p>
     );
@@ -103,18 +45,38 @@ export default function CartView() {
                   {item.product_category}
                 </p>
                 <p className="text-brand-smoke text-xs">
-                  Qty: {item.quantity} ·{" "}
                   {item.product_price !== null
                     ? formatCurrency(Number(item.product_price) * item.quantity)
                     : "Price unavailable"}
                 </p>
               </div>
-              <button
-                onClick={() => handleRemove(item.product_id)}
-                className="font-body text-xs tracking-[0.15em] uppercase text-brand-gold hover:underline"
-              >
-                Remove
-              </button>
+              <div className="flex items-center gap-3">
+                <button
+                  aria-label="Decrease quantity"
+                  onClick={() =>
+                    handleAction(updateQuantity(item.product_id, item.quantity - 1))
+                  }
+                  className="text-brand-gold text-lg px-2 hover:text-brand-cream transition-colors"
+                >
+                  −
+                </button>
+                <span className="font-body text-sm text-brand-cream w-4 text-center">
+                  {item.quantity}
+                </span>
+                <button
+                  aria-label="Increase quantity"
+                  onClick={() => handleAction(addToCart(item.product_id, 1))}
+                  className="text-brand-gold text-lg px-2 hover:text-brand-cream transition-colors"
+                >
+                  +
+                </button>
+                <button
+                  onClick={() => handleAction(removeFromCart(item.product_id))}
+                  className="font-body text-xs tracking-[0.15em] uppercase text-brand-gold hover:underline"
+                >
+                  Remove
+                </button>
+              </div>
             </div>
           ))
         ) : (
@@ -146,7 +108,7 @@ export default function CartView() {
       )}
 
       <div className="mt-14">
-        <ProductListing onAdd={handleAddProduct} />
+        <ProductListing onAdd={addToCart} />
       </div>
     </div>
   );

@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { CATEGORIES } from "@/data/products";
 import CatalogCover from "@/components/catalog/CatalogCover";
 import TableOfContents from "@/components/catalog/TableOfContents";
-import CategorySection from "@/components/catalog/CategorySection";
+import InteractiveCatalog from "@/components/catalog/InteractiveCatalog";
 
 export const metadata: Metadata = {
   title: "Catalog",
@@ -15,9 +15,7 @@ export default function CatalogPage() {
     <div className="min-h-screen">
       <CatalogCover categories={CATEGORIES} />
       <TableOfContents categories={CATEGORIES} />
-      {CATEGORIES.map((category) => (
-        <CategorySection key={category.id} category={category} />
-      ))}
+      <InteractiveCatalog categories={CATEGORIES} />
     </div>
   );
 }

@@ -60,6 +60,20 @@ export async function getJson<TResponse>(
   return handleResponse<TResponse>(path, response);
 }
 
+export async function putJson<TResponse>(
+  path: string,
+  body: unknown,
+  token?: string
+): Promise<TResponse> {
+  const response = await fetch(`${BACKEND_URL}${path}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json", ...authHeaders(token) },
+    body: JSON.stringify(body),
+  });
+
+  return handleResponse<TResponse>(path, response);
+}
+
 export async function deleteJson<TResponse>(
   path: string,
   body: unknown,

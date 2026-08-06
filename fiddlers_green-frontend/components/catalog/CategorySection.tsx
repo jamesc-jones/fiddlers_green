@@ -3,6 +3,7 @@
 import { motion } from "framer-motion";
 import type { Category } from "@/data/products";
 import ProductCard from "@/components/catalog/ProductCard";
+import type { PublicProduct } from "@/components/catalog/InteractiveCatalog";
 
 // Section-level entrance only — the one animation permitted at this level.
 const sectionVariants = {
@@ -14,7 +15,13 @@ const sectionVariants = {
   },
 };
 
-export default function CategorySection({ category }: { category: Category }) {
+export default function CategorySection({
+  category,
+  backendProducts,
+}: {
+  category: Category;
+  backendProducts: PublicProduct[] | null;
+}) {
   return (
     <motion.section
       id={category.anchor}
@@ -36,7 +43,12 @@ export default function CategorySection({ category }: { category: Category }) {
 
         <div className="mt-12 md:mt-16 grid grid-cols-2 lg:grid-cols-4 gap-x-6 gap-y-12 md:gap-x-8 md:gap-y-16">
           {category.products.map((product, index) => (
-            <ProductCard key={product.id} product={product} priority={index === 0} />
+            <ProductCard
+              key={product.id}
+              product={product}
+              priority={index === 0}
+              backendProducts={backendProducts}
+            />
           ))}
         </div>
       </div>

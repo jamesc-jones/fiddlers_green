@@ -26,6 +26,18 @@ class CartRemoveRequest(BaseModel):
     product_id: uuid.UUID
 
 
+class CartUpdateRequest(BaseModel):
+    product_id: uuid.UUID
+    quantity: int
+
+    @field_validator("quantity")
+    @classmethod
+    def quantity_non_negative(cls, v: int) -> int:
+        if v < 0:
+            raise ValueError("Quantity must be zero or greater.")
+        return v
+
+
 class CartItemResponse(BaseModel):
     id: uuid.UUID
     product_id: uuid.UUID

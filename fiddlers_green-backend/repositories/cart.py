@@ -9,7 +9,7 @@ Rules enforced here:
 """
 import uuid
 import logging
-from typing import List
+from typing import List, Optional
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -80,6 +80,47 @@ async def add_to_cart(
     await session.commit()
     await session.refresh(item)
     logger.info("Cart item added: user=%s product=%s qty=%s", user_id, product_id, quantity)
+    return item
+
+
+async def set_cart_item_quantity(
+    session: AsyncSession,
+    user_id: uuid.UUID,
+    product_id: uuid.UUID,
+    quantity: int,
+) -> Optional[CartItem]:
+    """
+    Sets a cart item's quantity to an absolute value.
+
+    Caller (the route, via CartUpdateRequest's Pydantic validator)
+    guarantees quantity >= 0 before this is ever invoked — this function
+    does not re-validate that, unlike add_to_cart's defense-in-depth
+    check. The only failure this function can raise is "item not in
+    cart," so the route's ValueError -> 404 mapping is unambiguous.
+
+    quantity == 0 removes the item entirely — never writes a 0 row, so
+    the DB's quantity >= 1 CHECK constraint is never at risk.
+    """
+    result = await session.execute(
+        select(CartItem).where(
+            CartItem.user_id == user_id,
+            CartItem.product_id == product_id,
+        )
+    )
+    item = result.scalar_one_or_none()
+    if item is None:
+        raise ValueError(f"Product {product_id} is not in the cart.")
+
+    if quantity == 0:
+        await session.delete(item)
+        await session.commit()
+        logger.info("Cart item removed via set_cart_item_quantity: user=%s product=%s", user_id, product_id)
+        return None
+
+    item.quantity = quantity
+    await session.commit()
+    await session.refresh(item)
+    logger.info("Cart item quantity set: user=%s product=%s qty=%s", user_id, product_id, quantity)
     return item
 
 

@@ -5,6 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "@/contexts/AuthContext";
+import { useCart } from "@/contexts/CartContext";
 
 // ─── Navigation data ──────────────────────────────────────────────────────────
 // Add, rename, or reorder links here. The rest of the component updates automatically.
@@ -93,6 +94,7 @@ export default function Navbar() {
   const pathname = usePathname();
   const router = useRouter();
   const { user, isAdmin, logout } = useAuth();
+  const { cart } = useCart();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
 
@@ -206,6 +208,7 @@ export default function Navbar() {
 
             {authLinks.map(({ label, href, testId }) => {
               const isActive = pathname === href;
+              const showBadge = label === "Cart" && cart !== null && cart.total_items > 0;
               return (
                 <li key={href}>
                   <Link
@@ -224,6 +227,14 @@ export default function Navbar() {
                     aria-current={isActive ? "page" : undefined}
                   >
                     {label}
+                    {showBadge && (
+                      <span
+                        data-testid="nav-cart-badge"
+                        className="ml-1 text-brand-gold text-xs align-super"
+                      >
+                        ({cart!.total_items})
+                      </span>
+                    )}
                   </Link>
                 </li>
               );
@@ -323,6 +334,7 @@ export default function Navbar() {
 
               {authLinks.map(({ label, href, testId }, i) => {
                 const isActive = pathname === href;
+                const showBadge = label === "Cart" && cart !== null && cart.total_items > 0;
                 return (
                   <motion.li
                     key={href}
@@ -345,6 +357,14 @@ export default function Navbar() {
                       aria-current={isActive ? "page" : undefined}
                     >
                       {label}
+                      {showBadge && (
+                        <span
+                          data-testid="nav-cart-badge-mobile"
+                          className="ml-2 text-brand-gold text-xl align-super"
+                        >
+                          ({cart!.total_items})
+                        </span>
+                      )}
                     </Link>
                   </motion.li>
                 );
