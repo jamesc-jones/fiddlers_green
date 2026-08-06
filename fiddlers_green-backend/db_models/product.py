@@ -4,8 +4,9 @@ Not yet read by the frontend (which uses data/products.ts).
 """
 import uuid
 from datetime import datetime, timezone
+from decimal import Decimal
 
-from sqlalchemy import Boolean, DateTime, String, Text
+from sqlalchemy import Boolean, DateTime, Numeric, String, Text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -23,6 +24,10 @@ class Product(Base):
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     dosage: Mapped[str | None] = mapped_column(String(100), nullable=True)
     pricing: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    # Added in Phase 16 — numeric price for arithmetic (cart subtotals/totals).
+    # `pricing` (above) is untouched: existing display-string data is preserved,
+    # and this column is nullable so it's a purely additive migration.
+    price: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc)

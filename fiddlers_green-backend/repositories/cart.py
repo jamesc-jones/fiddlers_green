@@ -13,6 +13,7 @@ from typing import List
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from db_models.cart import CartItem
 from db_models.product import Product
@@ -21,9 +22,15 @@ logger = logging.getLogger(__name__)
 
 
 async def get_cart(session: AsyncSession, user_id: uuid.UUID) -> List[CartItem]:
-    """Returns all active cart items for a user, ordered by time added."""
+    """
+    Returns all active cart items for a user, ordered by time added.
+    Eager-loads the related Product (selectinload) so callers building a
+    response with product name/category/price don't trigger an N+1 —
+    one query for cart_items, one batched query for all related products.
+    """
     result = await session.execute(
         select(CartItem)
+        .options(selectinload(CartItem.product))
         .where(CartItem.user_id == user_id)
         .order_by(CartItem.added_at)
     )

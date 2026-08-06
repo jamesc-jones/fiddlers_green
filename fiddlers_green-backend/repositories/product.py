@@ -1,0 +1,70 @@
+"""
+Data access layer for Product.
+All product DB operations go through this module — no raw SQL in routes.
+Used by both the admin router (full CRUD, sees inactive products too) and
+the public products router (read-only, active products only).
+"""
+import uuid
+import logging
+from typing import List, Optional
+
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from db_models.product import Product
+
+logger = logging.getLogger(__name__)
+
+
+async def list_products(
+    session: AsyncSession,
+    *,
+    category: Optional[str] = None,
+    search: Optional[str] = None,
+    is_active: Optional[bool] = None,
+) -> List[Product]:
+    """
+    Returns products ordered by name.
+    is_active=None (the admin default) returns both active and inactive rows —
+    soft-deleted products remain visible to admins. Callers that must never
+    expose inactive products (the public /products route) pass is_active=True
+    explicitly; it is not something a caller of this function can leave to a
+    client-supplied value without deciding to.
+    """
+    query = select(Product)
+    if is_active is not None:
+        query = query.where(Product.is_active == is_active)
+    if category:
+        query = query.where(Product.category == category)
+    if search:
+        query = query.where(Product.name.ilike(f"%{search}%"))
+    result = await session.execute(query.order_by(Product.name))
+    return list(result.scalars().all())
+
+
+async def get_product_by_id(session: AsyncSession, product_id: uuid.UUID) -> Optional[Product]:
+    return await session.get(Product, product_id)
+
+
+async def create_product(session: AsyncSession, **fields) -> Product:
+    product = Product(**fields)
+    session.add(product)
+    await session.commit()
+    await session.refresh(product)
+    logger.info("Product created: id=%s name=%s", product.id, product.name)
+    return product
+
+
+async def update_product(session: AsyncSession, product: Product, **fields) -> Product:
+    for field, value in fields.items():
+        setattr(product, field, value)
+    await session.commit()
+    await session.refresh(product)
+    return product
+
+
+async def soft_delete_product(session: AsyncSession, product: Product) -> None:
+    """Sets is_active=False. Record is never hard-deleted."""
+    product.is_active = False
+    await session.commit()
+    logger.info("Product soft-deleted: id=%s name=%s", product.id, product.name)

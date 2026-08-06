@@ -6,108 +6,65 @@ not affected by any changes made through these endpoints.
 """
 import uuid
 import logging
-from typing import List, Optional
+from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from database import get_db
-from db_models.product import Product
 from db_models.user import User
 from dependencies.auth import require_admin
+from models.product import ProductCreateRequest, ProductResponse, ProductUpdateRequest
+from repositories.product import (
+    create_product,
+    get_product_by_id,
+    list_products,
+    soft_delete_product,
+    update_product,
+)
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
 
-# ---------------------------------------------------------------------------
-# Pydantic schemas (admin product API contracts)
-# ---------------------------------------------------------------------------
-class ProductCreateRequest(BaseModel):
-    name: str
-    category: str
-    description: Optional[str] = None
-    dosage: Optional[str] = None
-    pricing: Optional[str] = None
-
-
-class ProductUpdateRequest(BaseModel):
-    name: Optional[str] = None
-    category: Optional[str] = None
-    description: Optional[str] = None
-    dosage: Optional[str] = None
-    pricing: Optional[str] = None
-    is_active: Optional[bool] = None
-
-
-class ProductResponse(BaseModel):
-    id: uuid.UUID
-    name: str
-    category: str
-    description: Optional[str]
-    dosage: Optional[str]
-    pricing: Optional[str]
-    is_active: bool
-
-    model_config = {"from_attributes": True}
-
-
-# ---------------------------------------------------------------------------
-# Routes
-# ---------------------------------------------------------------------------
 @router.post("/products", response_model=ProductResponse, status_code=status.HTTP_201_CREATED)
-async def create_product(
+async def create_product_route(
     request: ProductCreateRequest,
     db: AsyncSession = Depends(get_db),
     _admin: User = Depends(require_admin),
-) -> Product:
-    product = Product(**request.model_dump())
-    db.add(product)
-    await db.commit()
-    await db.refresh(product)
-    logger.info("Product created: id=%s name=%s", product.id, product.name)
-    return product
+):
+    return await create_product(db, **request.model_dump())
 
 
 @router.get("/products", response_model=List[ProductResponse])
-async def list_products(
+async def list_products_route(
     db: AsyncSession = Depends(get_db),
     _admin: User = Depends(require_admin),
-) -> list:
-    result = await db.execute(select(Product).order_by(Product.name))
-    return result.scalars().all()
+):
+    return await list_products(db)
 
 
 @router.put("/products/{product_id}", response_model=ProductResponse)
-async def update_product(
+async def update_product_route(
     product_id: uuid.UUID,
     request: ProductUpdateRequest,
     db: AsyncSession = Depends(get_db),
     _admin: User = Depends(require_admin),
-) -> Product:
-    product = await db.get(Product, product_id)
+):
+    product = await get_product_by_id(db, product_id)
     if product is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Product not found.")
-    for field, value in request.model_dump(exclude_unset=True).items():
-        setattr(product, field, value)
-    await db.commit()
-    await db.refresh(product)
-    return product
+    return await update_product(db, product, **request.model_dump(exclude_unset=True))
 
 
 @router.delete("/products/{product_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_product(
+async def delete_product_route(
     product_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
     _admin: User = Depends(require_admin),
 ) -> None:
-    """Soft delete — sets is_active=False. Record is never hard-deleted."""
-    product = await db.get(Product, product_id)
+    product = await get_product_by_id(db, product_id)
     if product is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Product not found.")
-    product.is_active = False
-    await db.commit()
-    logger.info("Product soft-deleted: id=%s name=%s", product_id, product.name)
+    await soft_delete_product(db, product)
