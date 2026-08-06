@@ -1,12 +1,19 @@
 "use client";
 
-import { useCallback, useEffect, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useRequireAuth } from "@/hooks/useRequireAuth";
 import { deleteJson, getJson, postJson } from "@/lib/api";
+import ProductListing from "@/components/cart/ProductListing";
 
 interface CartItem {
   id: string;
   product_id: string;
+  product_name: string;
+  product_category: string;
+  // Backend serializes Decimal as a string (e.g. "15.00"), not a JSON
+  // number, to avoid float precision loss — confirmed against the live
+  // API, not assumed.
+  product_price: string | null;
   quantity: number;
   added_at: string;
 }
@@ -14,17 +21,17 @@ interface CartItem {
 interface CartResponse {
   items: CartItem[];
   total_items: number;
+  total_price: string | null;
 }
 
-const inputClasses =
-  "w-full bg-transparent border border-white/20 px-4 py-3 font-body text-brand-cream focus:outline-none focus:border-brand-gold";
+function formatCurrency(value: number): string {
+  return `$${value.toFixed(2)}`;
+}
 
 export default function CartView() {
   const { token, isLoading, isAllowed } = useRequireAuth();
 
   const [cart, setCart] = useState<CartResponse | null>(null);
-  const [productId, setProductId] = useState("");
-  const [quantity, setQuantity] = useState(1);
   const [error, setError] = useState("");
 
   const refreshCart = useCallback(async () => {
@@ -46,22 +53,15 @@ export default function CartView() {
     }
   }, [isAllowed, token, refreshCart]);
 
-  async function handleAdd(event: FormEvent) {
-    event.preventDefault();
-    if (!token || !productId) return;
+  async function handleAddProduct(productId: string) {
+    if (!token) return;
     setError("");
-    try {
-      const data = await postJson<CartResponse>(
-        "/cart/add",
-        { product_id: productId, quantity },
-        token
-      );
-      setCart(data);
-      setProductId("");
-      setQuantity(1);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not add item.");
-    }
+    const data = await postJson<CartResponse>(
+      "/cart/add",
+      { product_id: productId, quantity: 1 },
+      token
+    );
+    setCart(data);
   }
 
   async function handleRemove(itemProductId: string) {
@@ -86,7 +86,7 @@ export default function CartView() {
   }
 
   return (
-    <div className="max-w-lg mx-auto text-left">
+    <div className="max-w-2xl mx-auto text-left">
       <div
         data-testid="cart-items"
         className="border border-white/10 divide-y divide-white/10"
@@ -98,12 +98,15 @@ export default function CartView() {
               className="flex items-center justify-between px-4 py-3"
             >
               <div className="font-body text-sm text-brand-cream">
+                <p className="text-brand-cream">{item.product_name}</p>
                 <p className="text-brand-smoke text-xs uppercase tracking-wide">
-                  Product
+                  {item.product_category}
                 </p>
-                <p className="truncate max-w-[220px]">{item.product_id}</p>
                 <p className="text-brand-smoke text-xs">
-                  Qty: {item.quantity}
+                  Qty: {item.quantity} ·{" "}
+                  {item.product_price !== null
+                    ? formatCurrency(Number(item.product_price) * item.quantity)
+                    : "Price unavailable"}
                 </p>
               </div>
               <button
@@ -122,51 +125,29 @@ export default function CartView() {
       </div>
 
       {cart && (
-        <p
-          data-testid="cart-total"
+        <div
+          data-testid="cart-summary"
           className="mt-4 font-body text-sm text-brand-smoke text-center"
         >
-          Total items: {cart.total_items}
-        </p>
+          <p>Total items: {cart.total_items}</p>
+          <p>
+            Total:{" "}
+            {cart.total_price !== null
+              ? formatCurrency(Number(cart.total_price))
+              : "Total unavailable"}
+          </p>
+        </div>
       )}
-
-      <form
-        onSubmit={handleAdd}
-        aria-label="Add to cart"
-        className="mt-10 flex flex-col gap-4"
-      >
-        <p className="font-body text-xs tracking-[0.2em] uppercase text-brand-gold text-center">
-          Add a Product
-        </p>
-        <input
-          aria-label="Product ID"
-          placeholder="Product ID"
-          value={productId}
-          onChange={(event) => setProductId(event.target.value)}
-          className={inputClasses}
-          required
-        />
-        <input
-          aria-label="Quantity"
-          type="number"
-          min={1}
-          value={quantity}
-          onChange={(event) => setQuantity(Number(event.target.value))}
-          className={inputClasses}
-        />
-        <button
-          type="submit"
-          className="inline-flex items-center justify-center border border-brand-gold text-brand-gold px-8 py-3 font-body text-sm tracking-[0.15em] uppercase transition-colors duration-300 hover:bg-brand-gold hover:text-black"
-        >
-          Add to Cart
-        </button>
-      </form>
 
       {error && (
         <p role="alert" className="mt-4 font-body text-sm text-red-400 text-center">
           {error}
         </p>
       )}
+
+      <div className="mt-14">
+        <ProductListing onAdd={handleAddProduct} />
+      </div>
     </div>
   );
 }
