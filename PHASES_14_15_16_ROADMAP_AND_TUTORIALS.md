@@ -1,6 +1,6 @@
 # Fiddler's Green — Phases 14–16: Roadmap & Claude CLI Implementation Tutorials
 
-> **Status of existing phases:** Phases 1–13 complete and validated. Phase 16 (Product Catalog Integration) is complete via Phase 16.1 (Catalog Cart Integration) and Phase 16.2 (Gummy Variant Cart Integration); the remaining original Phase 16 scope — replacing the static frontend catalog with a fully backend-driven one — is deferred to Phase 16.3 (Backend-Driven Catalog Migration), not started. See [Phase 16 Completion Status](#phase-16-completion-status) below.
+> **Status of existing phases:** Phases 1–13 complete and validated. Phase 16 (Product Catalog Integration) is complete via Phase 16.1 (Catalog Cart Integration) and Phase 16.2 (Gummy Variant Cart Integration); the remaining original Phase 16 scope — extending the current, valid transitional architecture (`Backend Product → Cart System`) to also drive catalog rendering (`Backend Product → Catalog Rendering`) — is deferred to Phase 16.3 (Backend-Driven Catalog Evolution), not started. See [Phase 16 Completion Status](#phase-16-completion-status) below.
 > This document covers the application-development phases — Database Integration, Authentication & RBAC, and Product Catalog Integration — and provides step-by-step Claude CLI tutorials for Phases 14 and 15. The production-focused phases that follow (Final Production Polish + QA, and VPS Deployment) have moved to [`PHASES_17_18_ROADMAP_AND_TUTORIALS.md`](./PHASES_17_18_ROADMAP_AND_TUTORIALS.md).
 > Phase 15.1 (Frontend Authentication UI Integration) is documented separately in `PHASE_15_1_AUTH_UI_INTEGRATION.md`, not in this file.
 
@@ -22,7 +22,7 @@
 2. [Phase 15 — Authentication & RBAC](#phase-15--authentication--role-based-access-control-rbac)
 3. [Phase 16 — Product Catalog Integration](#phase-16--product-catalog-integration)
    - [Phase 16 Completion Status](#phase-16-completion-status)
-   - [Phase 16.3 — Backend-Driven Catalog Migration](#phase-163--backend-driven-catalog-migration)
+   - [Phase 16.3 — Backend-Driven Catalog Evolution](#phase-163--backend-driven-catalog-evolution)
 4. [Tutorial A — Database Integration (Phase 14)](#tutorial-a--database-integration-phase-14)
 5. [Tutorial B — Authentication & RBAC (Phase 15)](#tutorial-b--authentication--rbac-phase-15)
 6. [Final Safety Guarantee Checklist](#final-safety-guarantee-checklist)
@@ -336,28 +336,25 @@ Phase 16 completes the transition from a backend-enabled shopping cart into a co
 
 #### Deferred to Phase 16.3
 
-**Backend-Driven Catalog Migration** — see [Phase 16.3](#phase-163--backend-driven-catalog-migration) below for full scope. In short: the frontend catalog (`data/products.ts`) is still the source of truth for what renders; the backend `Product` table is joined to it only for cart purposes. Product images, live product listing/detail pages, and search were never implemented at the backend-data level. None of this blocks Phase 17 — it's tracked, not required.
+**Backend-Driven Catalog Evolution** — see [Phase 16.3](#phase-163--backend-driven-catalog-evolution) below for full scope. This is an evolution of the current architecture, not a correction of it: the current design is a valid transitional architecture — the backend `Product` table is already correctly wired to the cart (`Backend Product → Cart System`); what's missing is only that same backend `Product` table also driving catalog rendering (`Backend Product → Catalog Rendering`). The frontend catalog (`data/products.ts`) is still the source of truth for what renders, and product images, live product listing/detail pages, and search were never implemented at the backend-data level. None of this blocks Phase 17 — it's tracked, not required.
 
 ```
-Current:
+Current (valid transitional architecture):
 
-Frontend Static Catalog
+Backend Product
         |
         v
-Backend Product Matching
-        |
-        v
-Cart
+Cart System
+
+Frontend Static Catalog ──(name-matched)──> Backend Product
 
 Future (Phase 16.3):
 
-Backend Product API
+Backend Product
         |
-        v
-Frontend Catalog Rendering
-        |
-        v
-Cart
+        +──────────────┐
+        v              v
+   Cart System   Catalog Rendering
 ```
 
 #### Why this phased approach was the better engineering choice
@@ -374,18 +371,18 @@ CartItem
 Customer Cart
 ```
 
-Attempting the full catalog migration first would have meant changing products, catalog, cart, gummy variants, admin, and frontend rendering all simultaneously. Splitting the work into 16.1 → 16.2 → (deferred) 16.3 reduced risk at each step and kept every change independently testable, at the cost of temporarily leaving the catalog's data architecture unmigrated. That tradeoff is accepted; it does not need to be revisited before Phase 17.
+Attempting the full catalog evolution first would have meant changing products, catalog, cart, gummy variants, admin, and frontend rendering all simultaneously. Splitting the work into 16.1 → 16.2 → (deferred) 16.3 reduced risk at each step and kept every change independently testable, at the cost of temporarily leaving catalog rendering on the static data path. That tradeoff is accepted; it does not need to be revisited before Phase 17.
 
 ---
 
-## Phase 16.3 — Backend-Driven Catalog Migration
+## Phase 16.3 — Backend-Driven Catalog Evolution
 
 **Status: NOT STARTED**
 **Prerequisite:** Phase 16.1 and Phase 16.2 complete and validated (they are).
 
 ### Objective
 
-Replace the frontend's static product data (`data/products.ts`) with a fully backend-driven catalog, closing the remaining gap between this document's original Phase 16 spec and what 16.1/16.2 actually delivered (a cart integration layered on top of the static catalog, not a replacement of it).
+Extend the current, valid transitional architecture — where the backend `Product` table already correctly drives the cart — so it also drives catalog rendering, replacing the frontend's static product data (`data/products.ts`) with a fully backend-driven catalog. This is an evolution of what 16.1/16.2 built, not a correction of it: those phases correctly established `Backend Product → Cart System`; this phase adds the missing `Backend Product → Catalog Rendering` path.
 
 ### Backend Work
 
