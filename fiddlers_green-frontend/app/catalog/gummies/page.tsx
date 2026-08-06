@@ -1,33 +1,27 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
 
 import GummiesHero from "@/components/catalog/gummies/GummiesHero";
 import GummiesEntrySelector from "@/components/catalog/gummies/GummiesEntrySelector";
 import StrengthSelector from "@/components/catalog/gummies/StrengthSelector";
+import GummyVariantActions from "@/components/catalog/gummies/GummyVariantActions";
 
-type Stage = "entry" | "strength";
-
-// Brief pause so the selected state is visible before the route changes.
-const NAVIGATE_DELAY_MS = 350;
+type Stage = "entry" | "strength" | "resolve";
 
 export default function GummiesPage() {
-  const router = useRouter();
   const [stage, setStage] = useState<Stage>("entry");
   const [entry, setEntry] = useState<string | null>(null);
-  // Reserved for a later phase (e.g. passing full selection context
-  // downstream); navigation itself is driven by handleStrengthSelect below.
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [strength, setStrength] = useState<string | null>(null);
 
-  function handleStrengthSelect(strength: string) {
-    setStrength(strength);
-
-    setTimeout(() => {
-      router.push(`/catalog/gummies/${strength}`);
-    }, NAVIGATE_DELAY_MS);
+  function handleStrengthSelect(selectedStrength: string) {
+    setStrength(selectedStrength);
+    // Phase 16.2: resolution + Add to Cart happen in-page (no route change)
+    // — the old /catalog/gummies/[strength] navigation lost the `entry`
+    // dimension across the page boundary, and that stub route still exists
+    // and still redirects back here for any stray/bookmarked direct links.
+    setStage("resolve");
   }
 
   return (
@@ -64,6 +58,22 @@ export default function GummiesPage() {
               entry={entry}
               onSelectStrength={handleStrengthSelect}
               onBack={() => setStage("entry")}
+            />
+          </motion.div>
+        )}
+
+        {stage === "resolve" && entry && strength && (
+          <motion.div
+            key="resolve"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            transition={{ duration: 0.4 }}
+          >
+            <GummyVariantActions
+              entry={entry}
+              strength={strength}
+              onBack={() => setStage("strength")}
             />
           </motion.div>
         )}

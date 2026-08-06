@@ -12,6 +12,7 @@ interface Product {
   dosage: string | null;
   pricing: string | null;
   is_active: boolean;
+  variant_option: string | null;
 }
 
 const inputClasses =
@@ -24,6 +25,11 @@ export default function AdminProductsView() {
   const [name, setName] = useState("");
   const [category, setCategory] = useState("");
   const [pricing, setPricing] = useState("");
+  // Phase 16.2 — only meaningful for gummy configuration products
+  // (category="gummies"); left blank for every other product, same as
+  // the backend leaves both columns NULL when they're not sent.
+  const [dosage, setDosage] = useState("");
+  const [variantOption, setVariantOption] = useState("");
   const [error, setError] = useState("");
 
   const refreshProducts = useCallback(async () => {
@@ -50,12 +56,20 @@ export default function AdminProductsView() {
     try {
       await postJson<Product>(
         "/admin/products",
-        { name, category, pricing: pricing || undefined },
+        {
+          name,
+          category,
+          pricing: pricing || undefined,
+          dosage: dosage || undefined,
+          variant_option: variantOption || undefined,
+        },
         token
       );
       setName("");
       setCategory("");
       setPricing("");
+      setDosage("");
+      setVariantOption("");
       await refreshProducts();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not create product.");
@@ -78,6 +92,8 @@ export default function AdminProductsView() {
                 <p>{product.name}</p>
                 <p className="text-brand-smoke text-xs uppercase tracking-wide">
                   {product.category} {product.pricing ? `· ${product.pricing}` : ""}
+                  {product.variant_option ? ` · ${product.variant_option}` : ""}
+                  {product.dosage ? ` · ${product.dosage}` : ""}
                 </p>
               </div>
               <span
@@ -121,6 +137,20 @@ export default function AdminProductsView() {
           placeholder="Pricing (optional)"
           value={pricing}
           onChange={(event) => setPricing(event.target.value)}
+          className={inputClasses}
+        />
+        <input
+          aria-label="Dosage"
+          placeholder="Dosage (optional, e.g. 2500mg)"
+          value={dosage}
+          onChange={(event) => setDosage(event.target.value)}
+          className={inputClasses}
+        />
+        <input
+          aria-label="Variant Option"
+          placeholder="Variant Option (optional, gummy configurations only)"
+          value={variantOption}
+          onChange={(event) => setVariantOption(event.target.value)}
           className={inputClasses}
         />
         <button

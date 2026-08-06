@@ -46,7 +46,45 @@ async def get_product_by_id(session: AsyncSession, product_id: uuid.UUID) -> Opt
     return await session.get(Product, product_id)
 
 
+async def _check_gummy_variant_conflict(
+    session: AsyncSession,
+    *,
+    variant_option: Optional[str],
+    dosage: Optional[str],
+    exclude_id: Optional[uuid.UUID] = None,
+) -> None:
+    """
+    Phase 16.2: a gummy configuration (variant_option + dosage) must
+    resolve to exactly one Product. This mirrors the partial unique index
+    on the same two columns (see the Phase 16.2 migration) so a conflict
+    is caught here, before the DB constraint would raise a raw
+    IntegrityError, giving the admin a clear 409 instead. Only runs when
+    both fields are actually set — every non-gummy-configuration product
+    (Flowers, Hash, named Gummies) leaves both NULL and is never checked.
+    """
+    if not variant_option or not dosage:
+        return
+    query = select(Product).where(
+        Product.variant_option == variant_option,
+        Product.dosage == dosage,
+        Product.is_active.is_(True),
+    )
+    if exclude_id is not None:
+        query = query.where(Product.id != exclude_id)
+    existing = (await session.execute(query)).scalars().first()
+    if existing is not None:
+        raise ValueError(
+            f"A gummy product with variant_option={variant_option!r} and "
+            f"dosage={dosage!r} already exists (id={existing.id})."
+        )
+
+
 async def create_product(session: AsyncSession, **fields) -> Product:
+    await _check_gummy_variant_conflict(
+        session,
+        variant_option=fields.get("variant_option"),
+        dosage=fields.get("dosage"),
+    )
     product = Product(**fields)
     session.add(product)
     await session.commit()
@@ -56,6 +94,12 @@ async def create_product(session: AsyncSession, **fields) -> Product:
 
 
 async def update_product(session: AsyncSession, product: Product, **fields) -> Product:
+    await _check_gummy_variant_conflict(
+        session,
+        variant_option=fields.get("variant_option", product.variant_option),
+        dosage=fields.get("dosage", product.dosage),
+        exclude_id=product.id,
+    )
     for field, value in fields.items():
         setattr(product, field, value)
     await session.commit()

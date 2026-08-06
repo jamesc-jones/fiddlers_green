@@ -28,6 +28,15 @@ class Product(Base):
     # `pricing` (above) is untouched: existing display-string data is preserved,
     # and this column is nullable so it's a purely additive migration.
     price: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), nullable=True)
+    # Added in Phase 16.2 — identifies a gummy configuration product (e.g.
+    # "classic", "high", "bulk", "sampler" from data/entryOptions.ts on the
+    # frontend). NULL for every non-gummy-configuration product (Flowers,
+    # Hash, named Gummies flavors) — this column only has meaning paired
+    # with `dosage` above, which Phase 16.2 reuses for the strength string
+    # (e.g. "2500mg"). See the partial unique index in the Phase 16.2
+    # migration: (variant_option, dosage) must be unique whenever both are
+    # set, so a gummy selection always resolves to exactly one Product.
+    variant_option: Mapped[str | None] = mapped_column(String(50), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc)

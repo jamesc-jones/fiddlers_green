@@ -34,7 +34,10 @@ async def create_product_route(
     db: AsyncSession = Depends(get_db),
     _admin: User = Depends(require_admin),
 ):
-    return await create_product(db, **request.model_dump())
+    try:
+        return await create_product(db, **request.model_dump())
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
 
 
 @router.get("/products", response_model=List[ProductResponse])
@@ -55,7 +58,10 @@ async def update_product_route(
     product = await get_product_by_id(db, product_id)
     if product is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Product not found.")
-    return await update_product(db, product, **request.model_dump(exclude_unset=True))
+    try:
+        return await update_product(db, product, **request.model_dump(exclude_unset=True))
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
 
 
 @router.delete("/products/{product_id}", status_code=status.HTTP_204_NO_CONTENT)

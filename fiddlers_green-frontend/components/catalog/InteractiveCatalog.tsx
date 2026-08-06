@@ -17,6 +17,11 @@ export interface PublicProduct {
   description: string | null;
   price: string | null;
   is_active: boolean;
+  // Added in Phase 16.2 — only meaningful for gummy configuration products
+  // (see components/catalog/gummies/GummyVariantActions.tsx). NULL for
+  // every Flower/Hash/named-Gummies product.
+  dosage: string | null;
+  variant_option: string | null;
 }
 
 export default function InteractiveCatalog({ categories }: { categories: Category[] }) {
