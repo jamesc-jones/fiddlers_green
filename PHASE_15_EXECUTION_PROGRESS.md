@@ -279,3 +279,29 @@ Step titles below are copied verbatim from that document's `### STEP B-N` headin
 All 18 steps (B-1 through B-18) implemented, validated, committed, and pushed.
 Authentication, RBAC, and the shopping cart are fully live and verified end-to-end,
 including the cross-user cart isolation security property.
+
+## Closing Note (post Phase 15.1)
+
+Final Phase 15 validation, re-confirmed after Phase 15.1 (Frontend Authentication
+UI Integration):
+
+- [x] User registration
+- [x] Login/logout
+- [x] JWT authentication
+- [x] RBAC authorization
+- [x] Admin login
+- [x] Admin product creation
+- [x] User cart persistence
+
+**Known limitation, not a Phase 15 defect:** the cart UI requires the customer to
+enter a raw product UUID by hand (`components/cart/CartView.tsx`'s "Product ID"
+field). This is a scope boundary, not a bug — investigated in detail during the
+Phase 16 audit (see `PHASE_16_PRODUCT_CATALOG_IMPLEMENTATION.md`): there is
+currently no customer-accessible endpoint that returns product name/category/price
+(`GET /admin/products` is admin-only; the public `/catalog` page reads from
+`data/products.ts`, a static file with its own disconnected fake IDs, not backend
+UUIDs), and `CartItemResponse` only ever carries `product_id`. Closing this gap
+requires a customer-facing product listing endpoint and cart-response enrichment —
+exactly Phase 16A/16D's scope, not a Phase 15 fix. Deferred to Phase 16.
+
+Phase 15 is considered complete as-is.
