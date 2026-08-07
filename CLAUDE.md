@@ -44,7 +44,7 @@ Key versions actually installed: Next.js 16.2.10, React 19.2.4. The App Router (
 
 ### Current state
 
-All primary routes are implemented and validated. Phases 1–17 are complete, and Phase 16.3 (Backend-Driven Catalog Evolution, including Phase 16.3.1 Weight-Based Variants) — previously deferred — is now also complete; see [Phase 16.3 Completed](#phase-163-completed--backend-driven-catalog--weight-based-variants) below. The next engineering gate is Phase 17.5 — Final Production Readiness Audit, a checklist-only validation before Phase 18 deployment begins. Phase 18 has NOT started. See `PHASES_14_15_16_ROADMAP_AND_TUTORIALS.md` for the original Phase 16 completion record and `PHASES_17_18_ROADMAP_AND_TUTORIALS.md` for Phases 17–18 including the Phase 17.5 gate.
+All primary routes are implemented and validated. Phases 1–17 are complete, and Phase 16.3 (Backend-Driven Catalog Evolution, including Phase 16.3.1 Weight-Based Variants) — previously deferred — is now also complete; see [Phase 16.3 Completed](#phase-163-completed--backend-driven-catalog--weight-based-variants) below. Phase 17.5 — Final Production Readiness Audit is also complete: its Critical and High-priority findings have been remediated and committed (see [Phase 17.5](#phase-175--final-production-readiness-audit) below); remaining Medium-priority hardening items are intentionally deferred to [Phase 17.6](#phase-176--deferred-operational-hardening-post-phase-18), which itself is deferred until after Phase 18. Phase 18 is the next engineering gate and has NOT started. See `PHASES_14_15_16_ROADMAP_AND_TUTORIALS.md` for the original Phase 16 completion record and `PHASES_17_18_ROADMAP_AND_TUTORIALS.md` for Phases 17–18 including the Phase 17.5 audit and Phase 17.6 deferral record.
 
 **Route status:**
 - `/` — Hero section (Phase 3) plus a skippable cinematic intro sequence on first visit per session (Phase 9)
@@ -778,20 +778,98 @@ Phase 17 was a hardening and validation pass. No new routes, models, or frontend
 
 ## Phase 17.5 — Final Production Readiness Audit
 
-**Status: NOT STARTED**
+**Status: COMPLETE**
 **Prerequisite:** Phase 17 complete and validated (it is).
 
-This is a checklist-only validation gate — not a feature phase. No code changes, no new infrastructure, no refactoring. The sole output is a readiness decision: *"Ready to proceed to Phase 18 deployment."*
+This was a checklist-only validation gate — not a feature phase. The audit itself made no code changes; it produced a severity-classified findings list (Critical / High / Medium / Low) and a readiness verdict. Its Critical and High-priority findings were then remediated in two follow-up commits: `b636425` (Critical: `docker-compose.prod.yml`, JWT_SECRET strength validation, admin-bootstrap CLI) and `8cb5d5e` (High: in-process rate limiting on `/auth/login`/`/auth/register`, DB-aware `/health`, shared 503 handling for database outages).
 
-Scope covers: `docker-compose.prod.yml` verification, environment variable completeness, secrets handling, health checks, container restart behavior, volume persistence, migration behavior, production build and startup verification, rollback procedure, security final review (CORS, JWT config, admin controls, no committed secrets), and operational readiness (logs, failure scenarios, monitoring expectations).
+Scope covered: `docker-compose.prod.yml` verification, environment variable completeness, secrets handling, health checks, container restart behavior, volume persistence, migration behavior, production build and startup verification, rollback procedure, security final review (CORS, JWT config, admin controls, no committed secrets), and operational readiness (logs, failure scenarios, monitoring expectations).
+
+Remaining Medium-priority findings (advanced rate-limiting strategies, security headers, CORS tightening, container/image hardening, and other non-critical resilience improvements) were intentionally deferred — see [Phase 17.6](#phase-176--deferred-operational-hardening-post-phase-18) below.
 
 See `PHASES_17_18_ROADMAP_AND_TUTORIALS.md` for the full Phase 17.5 checklist and readiness decision criteria.
+
+---
+
+## Phase 17.6 — Deferred Operational Hardening (Post-Phase 18)
+
+### Status
+
+Planned (Deferred)
+
+### Context
+
+Phase 17.5 remediation has been successfully completed and validated.
+
+Completed Work:
+
+- Critical fixes implemented and committed
+- High-priority fixes implemented and committed
+- All changes pushed to origin/main
+- Working tree is clean and stable
+
+The system is now considered safe and stable for continued forward development.
+
+### Decision
+
+All remaining medium-priority operational hardening items are intentionally deferred until after completion of Phase 18.
+
+Deferred items include:
+
+- Advanced rate limiting strategies
+- Security headers expansion and tightening
+- CORS policy tightening
+- Container hardening (runtime and image-level improvements)
+- Additional non-critical resilience improvements
+
+### Rationale
+
+This decision follows these principles:
+
+- The system is production-safe at the current scope
+- Deferred items are not launch-blocking for Phase 18
+- Avoid premature optimization while active feature development continues
+- Maintain clean phase boundaries and commit history
+- Consolidate hardening work into a dedicated post-Phase 18 pass
+
+### Constraints
+
+Until Phase 18 is complete:
+
+1. Do NOT implement or modify medium-priority hardening items.
+2. Do NOT reopen or refactor recently completed Phase 17.5 fixes.
+3. Treat Phase 17.5 as CLOSED and locked.
+
+### Future Execution Plan
+
+After Phase 18 completion:
+
+- Revisit deferred hardening items
+- Implement changes in controlled, logically grouped commits
+- Validate against production readiness requirements
+- Perform security and resilience verification
+
+### Current Next Step
+
+Phase 18 is the next development milestone.
+
+However, Phase 18 implementation has NOT started yet.
+
+When implementation begins, follow: `PHASES_17_18_ROADMAP_AND_TUTORIALS.md`
+
+Phase 18 execution requirements:
+
+- Follow roadmap steps in order
+- Make small, logically grouped commits
+- Avoid unrelated refactors
+- Flag blockers before proceeding
+- Maintain production-safe defaults
 
 ---
 
 ## Phase 18 — VPS Deployment / DigitalOcean Production
 
 **Status: NOT STARTED**
-**Prerequisite:** Phase 17.5 readiness decision confirmed.
+**Prerequisite:** Phase 17.5 readiness decision confirmed (it is — see [Phase 17.5](#phase-175--final-production-readiness-audit) above).
 
 See `PHASES_17_18_ROADMAP_AND_TUTORIALS.md` for the full Phase 18 VPS provisioning, Nginx, SSL, and deployment spec.
