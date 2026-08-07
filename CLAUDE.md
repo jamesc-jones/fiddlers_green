@@ -7,7 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 This is a monorepo with two independent projects, neither of which is wired to the other yet:
 
 - `fiddlers_green-frontend/` — a Next.js (App Router) site.
-- `fiddlers_green-backend/` — a minimal FastAPI backend (Phase 10), providing `/contact` and `/chat` endpoints, now backed by PostgreSQL via async SQLAlchemy + Alembic (Phase 14). See [Phase 10 Completed](#phase-10-completed--backend--ai-assistant) and [Phase 14 Completed](#phase-14-completed--postgresql--sqlalchemy-async--alembic) below.
+- `fiddlers_green-backend/` — a FastAPI backend providing `/contact`, `/chat`, `/auth`, `/admin`, `/customer`, and `/cart` endpoints, backed by PostgreSQL via async SQLAlchemy + Alembic (Phase 14), secured with JWT authentication and RBAC (Phase 15), and wired to the cart system (Phase 16). See [Phase 14 Completed](#phase-14-completed--postgresql--sqlalchemy-async--alembic), [Phase 15 Completed](#phase-15-completed--authentication--rbac), and [Phase 16 Completed](#phase-16-completed--product-catalog-integration) below.
 
 There is no root-level package.json, build system, or workspace tooling tying the two together — treat them as separate projects and `cd` into `fiddlers_green-frontend` for any npm/build/lint command.
 
@@ -44,43 +44,60 @@ Key versions actually installed: Next.js 16.2.10, React 19.2.4. The App Router (
 
 ### Current state
 
-All primary routes are implemented and validated. Phases 1-14 are complete; the current completed milestone is Phase 14 — PostgreSQL + SQLAlchemy (async) + Alembic. The next phase is Phase 15 — Authentication & Role-Based Access Control (RBAC). See `PHASES_14_15_16_ROADMAP_AND_TUTORIALS.md` for the full Phase 15/16 spec and Phase 17's renumbered VPS deployment tasks.
+All primary routes are implemented and validated. Phases 1–16 are complete; the current completed milestone is Phase 16 — Product Catalog Integration (via Phase 16.1 Catalog Cart Integration and Phase 16.2 Gummy Variant Cart Integration). Phase 16.3 (Backend-Driven Catalog Evolution) is deferred — not started. The next active phase is Phase 17 — Final Production Polish + QA + Deploy Ready. See `PHASES_14_15_16_ROADMAP_AND_TUTORIALS.md` for the Phase 16 completion record and `PHASES_17_18_ROADMAP_AND_TUTORIALS.md` for Phases 17–18.
 
 **Route status:**
 - `/` — Hero section (Phase 3) plus a skippable cinematic intro sequence on first visit per session (Phase 9)
-- `/catalog` — Editorial catalog with categories, product cards, hover effects (Phase 4)
-- `/catalog/gummies` — Interactive two-stage Haney Pot strength selector (Phase 5)
-- `/catalog/gummies/[strength]` — Stubbed strength detail page (to be expanded)
-- `/catalog/[category]` — Stubbed dynamic category route (to be expanded)
+- `/catalog` — Editorial catalog with categories, product cards, hover effects, Add to Cart buttons for authenticated users (Phases 4, 16.1)
+- `/catalog/gummies` — Interactive two-stage Haney Pot strength selector; selection resolves to a backend Product UUID and adds to cart (Phases 5, 16.2)
+- `/catalog/gummies/[strength]` — Redirects to `/catalog/gummies`
+- `/catalog/[category]` — Redirects to `/catalog`
 - `/heritage` — Full cultural storytelling page with timeline (Phase 6)
 - `/contact` — Working contact form, posts to the backend `/contact` endpoint (Phase 10)
 - `/chat` — AI Budtender chat widget, posts to the backend `/chat` endpoint (Phase 10)
+- `/login` — Customer and admin login form; issues JWT stored in localStorage (Phase 15.1)
+- `/register` — Customer self-registration form (Phase 15.1)
+- `/account` — Authenticated customer profile view; requires login (Phase 15.1)
+- `/cart` — Authenticated cart view; displays product name, category, and quantity; requires login (Phase 16.1)
+- `/admin/products` — Admin-only product management UI; requires admin JWT (Phase 15.1)
 
 **Component directories in use:**
-- `components/Navbar/` — Shared persistent navigation
+- `components/Navbar/` — Shared persistent navigation; shows Cart and Account links for authenticated users, Login link for unauthenticated users
 - `components/Hero.tsx` — Homepage hero with northern lights atmosphere (Phase 7); accepts a `skipEntrance` prop so it can render already-settled when the Phase 9 intro owns the reveal
 - `components/HomeClient.tsx` — Client orchestrator for `/`; decides whether the intro plays and coordinates it with `Hero` (Phase 9)
 - `components/IntroSequence/` — Cinematic intro overlay: `index.tsx`, `SkipButton`, `LogoReveal`, `FeatherSVG`, `ChainFormation`, `WampumReveal` (Phase 9)
-- `components/catalog/` — CatalogCover, CategorySection, ProductCard, TableOfContents, CategoryEffect
-- `components/catalog/gummies/` — GummiesHero, GummiesEntrySelector, StrengthSelector, EntryOptionCard, StrengthButton
+- `components/catalog/` — CatalogCover, CategorySection, ProductCard (with Add to Cart), TableOfContents, CategoryEffect (Phases 4, 16.1)
+- `components/catalog/gummies/` — GummiesHero, GummiesEntrySelector, StrengthSelector, EntryOptionCard, StrengthButton; selection flow resolves to a backend Product UUID (Phases 5, 16.2)
 - `components/heritage/` — HeritageHero, ChapterSection, TwoRowWampum, CovenantChain, TyendinagaHistory, HeritageTimeline, HeritageDivider
 - `components/contact/ContactForm.tsx` — Contact form, posts to backend `/contact` (Phase 10)
 - `components/chat/ChatWidget.tsx` — AI Budtender chat UI, posts to backend `/chat` (Phase 10)
 - `components/Footer.tsx` — Minimal branded footer, mounted in root layout (Phase 11)
 - `components/FloatingChat/` — Persistent floating chat widget: `index.tsx` (root orchestrator), `ChatButton.tsx` (FAB), `ChatPanel.tsx` (dialog + FAQ quick-replies), `MessageList.tsx` (auto-scroll), `MessageInput.tsx` (Phase 12)
+- `components/auth/` — `LoginForm.tsx`, `RegisterForm.tsx` (Phase 15.1)
+- `components/account/AccountView.tsx` — Authenticated customer profile display (Phase 15.1)
+- `components/admin/AdminProductsView.tsx` — Admin product CRUD UI; requires admin JWT (Phase 15.1)
+- `components/cart/CartView.tsx` — Authenticated cart display with product name, category, quantity, and remove controls (Phase 16.1)
 
 **Data layer:**
-- `data/products.ts` — Static typed catalog data (CATEGORIES array, Product and Category types)
+- `data/products.ts` — Static typed catalog data (CATEGORIES array, Product and Category types); still the source of truth for catalog rendering — will be replaced by `GET /products` in Phase 16.3
 - `data/strengths.ts` — Gummy strength options (STRENGTHS const, Strength type)
 - `data/entryOptions.ts` — Gummy entry options (ENTRY_OPTIONS const, EntryOptionId type)
-- `lib/api.ts` — generic `postJson` helper against `NEXT_PUBLIC_BACKEND_URL` (Phase 10)
+- `lib/api.ts` — `postJson`, `getJson`, `deleteJson` helpers against `NEXT_PUBLIC_BACKEND_URL`; all support an optional Bearer token (Phase 10, extended Phase 15)
 - `hooks/useChatMessages.ts` — shared message state and `sendMessage` logic; consumed by both `ChatWidget` and `FloatingChat` (Phase 12)
+- `contexts/AuthContext.tsx` — global auth state (user, token, isAdmin, login, register, logout); JWT persisted in `localStorage` under key `fg_auth_token`; token validated against `/auth/me` on mount (Phase 15.1)
+- `hooks/useRequireAuth.ts` — redirect-to-login guard for protected pages; accepts an optional role constraint (Phase 15.1)
 
-**Backend data layer (Phase 14):**
+**Backend data layer (Phases 14–16):**
 - `fiddlers_green-backend/database.py` — async SQLAlchemy engine, `AsyncSessionLocal` session factory, `Base` declarative class, `get_db()` FastAPI dependency
-- `fiddlers_green-backend/db_models/` — SQLAlchemy ORM models: `ContactSubmission` (implemented), `Product` and `User` (scaffolded for Phase 15, no routes yet)
-- `fiddlers_green-backend/repositories/contact.py` — `save_contact_submission()`; all DB writes for `/contact` go through this module, never raw SQL in the route
-- `fiddlers_green-backend/alembic/` + `alembic.ini` — async Alembic migrations; `alembic/versions/483f420bc9c8_initial_schema.py` creates all three tables
+- `fiddlers_green-backend/db_models/` — SQLAlchemy ORM models: `ContactSubmission`, `Product` (with `price NUMERIC(10,2)`, `image_url`, `variant_option`, `dosage`, `is_active`), `User`, `CartItem`
+- `fiddlers_green-backend/repositories/` — `contact.py` (`save_contact_submission()`), `user.py` (`create_user()`, `get_user_by_email()`), `cart.py` (`get_cart()`, `add_to_cart()`, `remove_from_cart()`)
+- `fiddlers_green-backend/dependencies/auth.py` — `get_current_user()`, `require_admin()`, `require_customer()` FastAPI dependency guards
+- `fiddlers_green-backend/services/auth_service.py` — `hash_password()`, `verify_password()`, `create_access_token()`, `decode_access_token()` (bcrypt + python-jose)
+- `fiddlers_green-backend/routes/auth.py` — `POST /auth/register`, `POST /auth/login`, `GET /auth/me`
+- `fiddlers_green-backend/routes/admin.py` — `POST/GET/PUT/DELETE /admin/products` (admin JWT required)
+- `fiddlers_green-backend/routes/customer.py` — `GET /customer/me`, `GET /customer/orders` (scaffold: returns `[]`)
+- `fiddlers_green-backend/routes/cart.py` — `GET /cart`, `POST /cart/add`, `DELETE /cart/remove` (customer JWT required; ownership enforced via JWT `user_id`, never the request body)
+- `fiddlers_green-backend/alembic/` + `alembic.ini` — async Alembic migrations; chain: `483f420bc9c8_initial_schema` → `65be7bc486c3_add_cart_items` (and additional Phase 16 price/variant migrations)
 - `fiddlers_green-backend/entrypoint.sh` — runs `alembic upgrade head` before starting uvicorn; degrades gracefully (logs a warning, still starts the server) if the DB is unavailable at container startup, rather than crashing
 
 ## Phase 2 Completed — Layout & Navbar Foundation
@@ -557,13 +574,122 @@ Phase 14 introduced a database layer into the existing FastAPI backend, followin
 
 ---
 
-## Phase 17 — VPS Deployment with NGINX + Domain + SSL
+## Phase 15 Completed — Authentication & Role-Based Access Control (RBAC)
+
+Phase 15 introduced JWT authentication and role-based access control to the existing FastAPI backend. All existing public routes remained fully accessible without authentication throughout.
+
+### What was built
+- **`services/auth_service.py`** — bcrypt password hashing (`passlib`) and JWT management (`python-jose`); stateless tokens with 60-minute TTL, `HS256` signing, `fiddlers-green` issuer claim.
+- **`dependencies/auth.py`** — `get_current_user()` (validates Bearer token + live DB user lookup), `require_admin()` (403 if not admin), `require_customer()` (403 if not customer or admin).
+- **`routes/auth.py`** — `POST /auth/register` (customer self-registration, returns user; no token), `POST /auth/login` (returns JWT for admin or customer), `GET /auth/me` (returns current user profile).
+- **`routes/admin.py`** — `POST/GET/PUT/DELETE /admin/products`; all routes require admin JWT; soft-delete only (`is_active=False`).
+- **`routes/customer.py`** — `GET /customer/me` (profile), `GET /customer/orders` (scaffold: returns `[]`).
+- **`routes/cart.py`** — `GET /cart`, `POST /cart/add`, `DELETE /cart/remove`; all require customer or admin JWT; `user_id` always sourced from the token, never the request body.
+- **`repositories/user.py`** — `create_user()` (hashes password, raises `ValueError` on duplicate email), `get_user_by_email()`.
+- **`repositories/cart.py`** — `get_cart()`, `add_to_cart()` (upserts quantity; validates product exists and is active), `remove_from_cart()` (idempotent).
+- **`db_models/cart.py`** — `CartItem` ORM model with `CHECK quantity >= 1` constraint, FKs to `users` and `products` with `ondelete="CASCADE"`.
+- **Alembic migration** — `65be7bc486c3_add_cart_items` creates `cart_items` table with user_id index.
+
+### Phase 15.1 — Frontend Authentication UI Integration
+- **`contexts/AuthContext.tsx`** — global auth state provider; JWT in `localStorage`; validates stored token against `/auth/me` on mount to catch expired/tampered tokens immediately.
+- **`hooks/useRequireAuth.ts`** — route-level auth guard; redirects to `/login` when unauthenticated or unauthorized.
+- **`app/login/page.tsx`** + **`components/auth/LoginForm.tsx`** — email/password login form.
+- **`app/register/page.tsx`** + **`components/auth/RegisterForm.tsx`** — customer self-registration form; logs in automatically on success.
+- **`app/account/page.tsx`** + **`components/account/AccountView.tsx`** — authenticated customer profile view.
+- **`app/admin/products/page.tsx`** + **`components/admin/AdminProductsView.tsx`** — admin-only product CRUD UI.
+- **`app/cart/page.tsx`** + **`components/cart/CartView.tsx`** — authenticated cart page (initial scaffold; enriched in Phase 16.1).
+- **`components/Navbar/index.tsx`** — updated to show Cart/Account links for authenticated users and Login link for guests.
+
+### Security constraints
+- JWT secret must be set via `JWT_SECRET` env var — backend warns at startup if absent and refuses to issue tokens.
+- Cart ownership is enforced at the API layer via the JWT `sub` claim; a customer cannot read or modify another customer's cart.
+- Admin routes return 403 for valid customer tokens and 401 for missing/invalid tokens.
+- Passwords are never returned in any API response.
+
+### Validation completed
+- `npm run lint`, `npx tsc --noEmit`, `npm run build` — all clean.
+- All existing public routes (`/`, `/catalog`, `/heritage`, `/contact`, `/chat`) continue to load without any authentication.
+- `POST /auth/register` → 201; `POST /auth/login` → JWT; `GET /auth/me` with token → user profile; all confirmed.
+- Admin and customer route separation verified: customer token → 403 on `/admin/*`; admin token → 200 on `/admin/*`.
+- Cart ownership: user A's token cannot access user B's cart.
+
+---
+
+## Phase 16 Completed — Product Catalog Integration
+
+Phase 16 delivered catalog-to-cart integration across two sub-phases. The original single-pass spec was intentionally split to keep each change small and independently validated.
+
+### Phase 16 delivery structure
+
+```
+Phase 16 — Product Catalog Integration
+    |
+    +-- Phase 16.1 — Catalog Cart Integration         ✅ COMPLETE
+    |
+    +-- Phase 16.2 — Gummy Variant Cart Integration   ✅ COMPLETE
+    |
+    +-- Phase 16.3 — Backend-Driven Catalog Evolution  ⏳ NOT STARTED (deferred)
+```
+
+### Phase 16.1 — Catalog Cart Integration
+
+Connected the existing static catalog (`data/products.ts`) to the backend `Product` table via name-based matching, enabling authenticated users to add standard products (Flower, Hash, Gummies) to their cart from the `/catalog` page.
+
+- ✅ `CartContext` introduced — global client-side cart state (item count, add/remove); consumed by `ProductCard` and `CartView`; cart badge in `Navbar` updates on every add/remove
+- ✅ Backend Product UUID mapping — static catalog entries matched to their backend UUID counterparts via product name; matching is fail-closed (no UUID → no Add to Cart button, no silent incorrect add)
+- ✅ Flower products — Add to Cart wired and validated
+- ✅ Hash products — Add to Cart wired and validated
+- ✅ Gummies catalog products — Add to Cart wired and validated (for the static catalog entries; gummy variant flow is Phase 16.2)
+- ✅ Cart page (`/cart`) enriched — displays product name and category alongside quantity; Remove button functional
+- ✅ Quantity controls — increment/decrement validated in both `CartView` and via the `POST /cart/add` upsert behavior
+- ✅ Customer cart visibility — cart is only visible and operable for authenticated users; unauthenticated users see no cart controls and cannot trigger cart API calls
+
+### Phase 16.2 — Gummy Variant Cart Integration
+
+Extended the Phase 5 two-stage gummy selector (entry option + strength) so each valid configuration resolves to a dedicated backend `Product` record and can be added to the cart.
+
+- ✅ Entry option + strength selection flow preserved exactly — no change to the selector UI or Phase 5 animation behavior
+- ✅ Each gummy configuration (`entry option × strength`) is represented as a distinct, named, sellable `Product` in the backend (e.g. "Haney Pot — Daily · 5mg")
+- ✅ Gummy selections resolve to their backend `Product` UUID via a deterministic name-based lookup
+- ✅ `CartItem` uses the resolved `Product` UUID directly — same cart API as all other products, no special-casing
+- ✅ Existing `CartContext` reused — no new cart state or hooks
+- ✅ Existing cart API (`POST /cart/add`) reused — no new endpoints
+- ✅ No `ProductVariant` table introduced — variants are distinct `Product` rows, not a relational variant model
+- ✅ No checkout or payment functionality introduced — cart only
+- ✅ Admin can create and manage gummy variant products via the existing `/admin/products` endpoint; `variant_option` and `dosage` fields identify them
+- ✅ Duplicate gummy variant prevention — adding the same configuration twice increments quantity rather than creating a duplicate cart row (inherits from `add_to_cart` upsert behavior)
+- ✅ Quantity controls validated for gummy variants
+- ✅ Cart display validated — gummy variant products display correctly in `CartView`
+
+### Architectural decision — why Phase 16.3 is deferred, not a gap
+
+The current architecture is a valid, intentional transitional design:
+
+```
+Current (Phase 16.1 / 16.2 — valid transitional architecture):
+
+Backend Product ──> Cart System
+Frontend Static Catalog ──(name-matched)──> Backend Product
+
+Future (Phase 16.3):
+
+Backend Product ──> Cart System
+                └──> Catalog Rendering   (replaces data/products.ts)
+```
+
+The cart system is fully backend-driven. The catalog display is not. This split reduced the Phase 16 surface area by keeping catalog rendering on the stable static path while the higher-risk cart integration work was validated. Phase 16.3 extends what Phase 16.1/16.2 built; it does not correct it. It does not block Phase 17.
+
+### Known state carried into Phase 17
+- `data/products.ts` is still the source of truth for catalog rendering — replaced in Phase 16.3.
+- Product images are not yet backend-supplied — replaced in Phase 16.3.
+- `GET /products` public endpoint exists (returns active products with `price`, `image_url`, `variant_option`) but is not yet consumed by the frontend catalog rendering path.
+- `DELETE /cart/remove` uses a JSON request body on a DELETE request — a known deviation from strict REST convention, accepted and documented; deferred to a cleanup phase.
+
+---
+
+## Phase 17 — Final Production Polish + QA + Deploy Ready
 
 **Status: NOT STARTED**
+**Prerequisite:** Phase 16 complete and validated (it is).
 
-Tasks:
-- Production deployment to Vercel.
-- Custom domain configuration and DNS propagation confirmed.
-- Final QA on production URL (not preview deployment).
-- Error monitoring active.
-- Feedback collection mechanism in place.
+See `PHASES_17_18_ROADMAP_AND_TUTORIALS.md` for the full Phase 17 spec, including: frontend–backend contract validation, end-to-end Playwright testing, error handling validation, performance targets, security validation, `docker-compose.prod.yml` authoring, deployment readiness, and rollback verification.

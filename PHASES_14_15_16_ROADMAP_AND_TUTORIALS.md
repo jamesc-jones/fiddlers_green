@@ -39,7 +39,7 @@
 
 ## Phase 14 — Database Integration
 
-**Status: NOT STARTED**
+**Status: COMPLETE**
 **Prerequisite:** Phases 1–13 complete and validated.
 **Goal:** Introduce a database layer into the existing application in a safe, non-breaking way. The frontend must work identically after every step. The `/contact` and `/chat` endpoints must continue returning the same response shapes throughout.
 
@@ -119,7 +119,7 @@ DATABASE_URL=postgresql+asyncpg://fg_user:fg_password@db:5432/fiddlers_green
 
 ## Phase 15 — Authentication & Role-Based Access Control (RBAC)
 
-**Status: NOT STARTED**
+**Status: COMPLETE**
 **Prerequisite:** Phase 14 complete and validated.
 **Goal:** Introduce a secure, additive authentication and authorization system. Every existing public route (`/`, `/catalog`, `/heritage`, `/contact`, `/chat`) remains fully accessible without authentication. Login is additive — nothing is gated until Phase 16 explicitly gates it.
 
@@ -319,20 +319,32 @@ Phase 16 completes the transition from a backend-enabled shopping cart into a co
 
 **Phase 16.1 — Catalog Cart Integration**
 
-- ✅ CartContext integration
-- ✅ Backend product matching
-- ✅ Flower/Hash/Gummy catalog cart support
-- ✅ Customer cart visibility
-- ✅ Fail-closed catalog behavior
+- ✅ CartContext integration completed
+- ✅ Backend Product UUID mapping completed
+- ✅ Flower products support cart functionality
+- ✅ Hash products support cart functionality
+- ✅ Gummies catalog products support cart functionality
+- ✅ Cart badge updates correctly
+- ✅ Cart page displays products correctly
+- ✅ Quantity controls work
+- ✅ Customer cart visibility implemented
+- ✅ Fail-closed product matching implemented
+- ✅ Logged-out users cannot access cart controls
 
 **Phase 16.2 — Gummy Variant Cart Integration**
 
-- ✅ Configurable gummy resolution
-- ✅ Entry option + strength mapping
-- ✅ Backend Product UUID resolution
-- ✅ Cart integration
-- ✅ Quantity management
-- ✅ Admin management support
+- ✅ Entry option + strength selection preserved
+- ✅ Gummy selections resolve to backend Product records
+- ✅ Each gummy configuration is represented as a sellable Product
+- ✅ CartItem continues using Product UUID directly
+- ✅ Existing CartContext reused
+- ✅ Existing cart API reused
+- ✅ No ProductVariant table introduced
+- ✅ No checkout/payment functionality introduced
+- ✅ Admin management support added
+- ✅ Duplicate gummy variant prevention implemented
+- ✅ Quantity controls validated
+- ✅ Cart display validated
 
 #### Deferred to Phase 16.3
 
@@ -429,6 +441,86 @@ Confirm:
 ### Outcome
 
 Phase 16.3 completes the original Phase 16 objective — a fully backend-driven product catalog — on top of the cart foundation Phase 16.1/16.2 already established, without having risked that foundation by attempting both at once.
+
+---
+
+### 16.3.1 — Flower & Hash Category Expansion + Weight-Based Pricing
+
+**Status: NOT STARTED**
+**Prerequisite:** Phase 16.3 core (backend-driven catalog rendering) in progress or complete.
+
+This subsection extends Phase 16.3 with category-level routing, product click navigation, and a weight-based variant + pricing system for Flower and Hash — the physical-product counterpart to the dosage-based variant system already established for Gummies in Phase 16.2.
+
+#### 1. Category Routing
+
+Extend catalog routing to match the existing Gummies pattern:
+
+| Route | Status |
+|---|---|
+| `/catalog/gummies` | Existing (Phase 5 / 16.2) |
+| `/catalog/flower` | New |
+| `/catalog/hash` | New |
+
+Each category page must:
+
+- Display products filtered by that category (sourced from `GET /products?category=flower` / `?category=hash`)
+- Allow product selection (variant picker — see §3)
+- Allow adding the selected variant to the cart
+
+#### 2. Product Click Navigation
+
+From the main `/catalog` page, clicking a product card must navigate to that product's category page (`/catalog/flower`, `/catalog/hash`) rather than anchor-scrolling to a page section (`#flower`, `#hash`).
+
+Goal: consistent navigation UX across all product categories, matching the Gummies flow established in Phase 5.
+
+#### 3. Variant System — Flower & Hash
+
+Unlike Gummies (dosage-based: 5 mg / 10 mg / etc.), Flower and Hash use **weight-based variants**. Supported options:
+
+| Key | Label | Weight |
+|---|---|---|
+| `g` | Gram | 1 g |
+| `hq` | Half-quarter | 3.5 g |
+| `q` | Quarter | 7 g |
+| `half_oz` | Half-ounce | 14 g |
+| `oz` | Ounce | 28 g |
+
+Each variant key maps to a distinct `Product` row in the backend (same pattern as gummy configurations in Phase 16.2 — no `ProductVariant` table).
+
+#### 4. Pricing Model — Derived from Base Price
+
+Admin input is a single value: `price_per_gram`. All other prices are computed deterministically from this base. No manual price entry per variant; no override logic in the initial implementation.
+
+| Variant | Derivation |
+|---|---|
+| `g` | `price_per_gram × 1` |
+| `hq` | `price_per_gram × 3.5` |
+| `q` | `price_per_gram × 7` |
+| `half_oz` | `price_per_gram × 14` |
+| `oz` | `price_per_gram × 28` |
+
+Derived prices are computed at product-creation time and stored on the respective `Product` row's `price` field. They are not recalculated on read; updating a base price requires re-deriving and updating all sibling variant rows.
+
+#### 5. Constraints
+
+- No manual `price` entry per variant — the admin UI accepts only `price_per_gram`; derived prices are calculated and written by the backend.
+- No override logic in the initial implementation — all prices flow strictly from the derivation table above.
+- All derived prices must be computed consistently; any rounding must use the same strategy across all variants (e.g. round to 2 decimal places using `NUMERIC(10,2)` — consistent with the existing `price` column type).
+
+#### 6. Architecture Notes
+
+- `product.id` (UUID) is unchanged — each weight variant is a distinct `Product` row, resolved by the frontend exactly as gummy configurations are in Phase 16.2.
+- The cart continues to use UUID-based mapping: the selected weight variant resolves to a `Product` UUID before `POST /cart/add` is called. No special-casing in the cart API.
+- A future SKU system (Phase 17 or later) remains independent of this design — the UUID → `Product` relationship established here does not conflict with a SKU layer added on top.
+- The `variant_option` field on `Product` (already present from Phase 16.2) is the appropriate column for storing the weight key (`g`, `hq`, `q`, `half_oz`, `oz`).
+
+#### 7. Implementation Guidance (Future)
+
+- Reuse the Gummies page structure (`app/catalog/gummies/page.tsx`, `StrengthSelector`, `GummiesEntrySelector`) as the template for `/catalog/flower` and `/catalog/hash` — the two-stage selection pattern (optional entry option → variant picker) maps cleanly to a one-stage pattern (weight picker only).
+- Abstract the variant rendering layer to support both selection systems without duplicating the picker UI:
+  - Dosage variants → Gummies (Phase 16.2)
+  - Weight variants → Flower / Hash (this subsection)
+- The `data/strengths.ts` and `data/entryOptions.ts` pattern (typed const arrays) can be replicated for weight options, with the weight key as the discriminator fed into the backend product name lookup.
 
 ---
 
