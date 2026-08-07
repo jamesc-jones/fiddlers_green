@@ -50,6 +50,14 @@ export default function AdminProductsView() {
   // the create form's existing optional-field pattern below) — there's no
   // way to explicitly clear an existing sku from this minimal UI.
   const [editSku, setEditSku] = useState("");
+  // Phase 17 Step 6 — none of Create/Save/Deactivate had any in-flight
+  // feedback before this: a double-click could fire two overlapping
+  // requests (e.g. two identical products from one "Create" double-click).
+  const [isCreating, setIsCreating] = useState(false);
+  // Save and Deactivate are mutually exclusive per product row (Deactivate
+  // isn't offered while a row is mid-edit), so one shared pending-id
+  // tracker is enough — same per-row pattern as CartView.tsx.
+  const [pendingId, setPendingId] = useState<string | null>(null);
 
   const refreshProducts = useCallback(async () => {
     if (!token) return;
@@ -72,6 +80,7 @@ export default function AdminProductsView() {
     event.preventDefault();
     if (!token) return;
     setError("");
+    setIsCreating(true);
     try {
       await postJson<Product>(
         "/admin/products",
@@ -94,6 +103,8 @@ export default function AdminProductsView() {
       await refreshProducts();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not create product.");
+    } finally {
+      setIsCreating(false);
     }
   }
 
@@ -107,6 +118,7 @@ export default function AdminProductsView() {
   async function handleSaveEdit(productId: string) {
     if (!token) return;
     setError("");
+    setPendingId(productId);
     try {
       await putJson<Product>(
         `/admin/products/${productId}`,
@@ -117,17 +129,22 @@ export default function AdminProductsView() {
       await refreshProducts();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not update product.");
+    } finally {
+      setPendingId(null);
     }
   }
 
   async function handleDeactivate(productId: string) {
     if (!token) return;
     setError("");
+    setPendingId(productId);
     try {
       await deleteJson<void>(`/admin/products/${productId}`, undefined, token);
       await refreshProducts();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not deactivate product.");
+    } finally {
+      setPendingId(null);
     }
   }
 
@@ -182,15 +199,17 @@ export default function AdminProductsView() {
                   </div>
                   <button
                     type="button"
+                    disabled={pendingId === product.id}
                     onClick={() => handleSaveEdit(product.id)}
-                    className="font-body text-xs tracking-[0.15em] uppercase text-brand-gold hover:underline"
+                    className="font-body text-xs tracking-[0.15em] uppercase text-brand-gold hover:underline disabled:opacity-50 disabled:pointer-events-none disabled:no-underline"
                   >
-                    Save
+                    {pendingId === product.id ? "Saving..." : "Save"}
                   </button>
                   <button
                     type="button"
+                    disabled={pendingId === product.id}
                     onClick={() => setEditingId(null)}
-                    className="font-body text-xs tracking-[0.15em] uppercase text-brand-smoke hover:underline"
+                    className="font-body text-xs tracking-[0.15em] uppercase text-brand-smoke hover:underline disabled:opacity-50 disabled:pointer-events-none disabled:no-underline"
                   >
                     Cancel
                   </button>
@@ -221,10 +240,11 @@ export default function AdminProductsView() {
                   {product.is_active && (
                     <button
                       type="button"
+                      disabled={pendingId === product.id}
                       onClick={() => handleDeactivate(product.id)}
-                      className="font-body text-xs tracking-[0.15em] uppercase text-red-400 hover:underline"
+                      className="font-body text-xs tracking-[0.15em] uppercase text-red-400 hover:underline disabled:opacity-50 disabled:pointer-events-none disabled:no-underline"
                     >
-                      Deactivate
+                      {pendingId === product.id ? "Deactivating..." : "Deactivate"}
                     </button>
                   )}
                 </div>
@@ -292,9 +312,10 @@ export default function AdminProductsView() {
         />
         <button
           type="submit"
-          className="inline-flex items-center justify-center border border-brand-gold text-brand-gold px-8 py-3 font-body text-sm tracking-[0.15em] uppercase transition-colors duration-300 hover:bg-brand-gold hover:text-black"
+          disabled={isCreating}
+          className="inline-flex items-center justify-center border border-brand-gold text-brand-gold px-8 py-3 font-body text-sm tracking-[0.15em] uppercase transition-colors duration-300 hover:bg-brand-gold hover:text-black disabled:opacity-50"
         >
-          Create Product
+          {isCreating ? "Creating..." : "Create Product"}
         </button>
       </form>
 
