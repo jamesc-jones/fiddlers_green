@@ -18,7 +18,20 @@ import uuid
 from decimal import Decimal
 from typing import Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
+
+
+def _validate_sku(v: Optional[str]) -> Optional[str]:
+    # Shared by create/update: sku is optional, but if provided it must be
+    # a real value (not blank/whitespace) within a sane length — purely a
+    # staff-facing label, never used for lookups, so no uniqueness check.
+    if v is None:
+        return v
+    if not v.strip():
+        raise ValueError("SKU cannot be blank.")
+    if len(v) > 64:
+        raise ValueError("SKU must be 64 characters or fewer.")
+    return v
 
 
 class ProductCreateRequest(BaseModel):
@@ -27,8 +40,29 @@ class ProductCreateRequest(BaseModel):
     description: Optional[str] = None
     dosage: Optional[str] = None
     pricing: Optional[str] = None
-    price: Optional[Decimal] = None
+    # Required as of Phase 17: the cart does arithmetic on this field, not
+    # on `pricing` (a legacy display string). Making it optional previously
+    # let products be created with a price shown to admins but never
+    # actually usable by the cart — see the Phase 17 product price
+    # integrity fix for the incident this caused.
+    price: Decimal
     variant_option: Optional[str] = None
+    # Added in Phase 17 — optional staff-facing identifier, distinct from
+    # and never a substitute for product.id (the UUID cart/DB relationships
+    # actually use). See _validate_sku above.
+    sku: Optional[str] = None
+
+    @field_validator("price")
+    @classmethod
+    def price_must_be_positive(cls, v: Decimal) -> Decimal:
+        if v <= 0:
+            raise ValueError("Price must be greater than zero.")
+        return v
+
+    @field_validator("sku")
+    @classmethod
+    def sku_valid_if_provided(cls, v: Optional[str]) -> Optional[str]:
+        return _validate_sku(v)
 
 
 class ProductUpdateRequest(BaseModel):
@@ -40,6 +74,28 @@ class ProductUpdateRequest(BaseModel):
     price: Optional[Decimal] = None
     is_active: Optional[bool] = None
     variant_option: Optional[str] = None
+    sku: Optional[str] = None
+
+    @field_validator("price")
+    @classmethod
+    def price_must_be_positive_if_provided(cls, v: Optional[Decimal]) -> Decimal:
+        # This only runs when the client includes "price" in the request
+        # body at all (Pydantic skips validators for omitted fields, which
+        # is what preserves "leave price unchanged" semantics on a partial
+        # update). So this rejects an explicit null or non-positive price
+        # without breaking the ability to update a product without
+        # touching its price.
+        if v is None or v <= 0:
+            raise ValueError("Price must be greater than zero.")
+        return v
+
+    @field_validator("sku")
+    @classmethod
+    def sku_valid_if_provided(cls, v: Optional[str]) -> Optional[str]:
+        # Unlike price, sku is allowed to be explicitly cleared back to
+        # null (it's optional by design, not a required field like price) —
+        # only a non-null value is validated for blankness/length.
+        return _validate_sku(v)
 
 
 class ProductResponse(BaseModel):
@@ -52,6 +108,7 @@ class ProductResponse(BaseModel):
     price: Optional[Decimal]
     is_active: bool
     variant_option: Optional[str] = None
+    sku: Optional[str] = None
 
     model_config = {"from_attributes": True}
 

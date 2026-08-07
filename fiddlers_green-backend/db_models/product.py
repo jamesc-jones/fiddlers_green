@@ -37,6 +37,13 @@ class Product(Base):
     # migration: (variant_option, dosage) must be unique whenever both are
     # set, so a gummy selection always resolves to exactly one Product.
     variant_option: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    # Added in Phase 17 — optional human-readable identifier for staff use
+    # (external references, cross-system/cross-staff communication). Purely
+    # additive and cosmetic: product.id (the UUID) remains the only
+    # identifier used internally by the cart/DB relationships. No
+    # uniqueness constraint by design — kept minimal per the Phase 17 scope
+    # that introduced this field.
+    sku: Mapped[str | None] = mapped_column(String(64), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc)

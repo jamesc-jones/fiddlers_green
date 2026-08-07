@@ -1,9 +1,12 @@
 import asyncio
+import logging
 import os
 import smtplib
 from email.message import EmailMessage
 
 from models.contact import ContactRequest
+
+logger = logging.getLogger(__name__)
 
 
 def _send_contact_email_sync(contact: ContactRequest) -> bool:
@@ -33,8 +36,8 @@ def _send_contact_email_sync(contact: ContactRequest) -> bool:
             server.login(smtp_user, smtp_password)
             server.send_message(message)
         return True
-    except Exception as error:
-        print(f"Failed to send contact email: {error}")
+    except Exception:
+        logger.exception("Failed to send contact email")
         return False
 
 

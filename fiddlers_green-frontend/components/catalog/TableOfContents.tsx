@@ -17,10 +17,12 @@ export default function TableOfContents({
 
       <ul className="mt-8 divide-y divide-white/10" role="list">
         {categories.map((category, i) => {
-          // Gummies leads into its own interactive experience route rather
-          // than scrolling to a section on this page — every other category
-          // still anchors down to its CategorySection.
-          const isExperience = category.id === "gummies";
+          // Phase 17 — every category now leads into its own dedicated page
+          // rather than scrolling to a section on this page (Flower/Hash
+          // joined Gummies here for consistent navigation). Kept as an
+          // explicit list rather than "always true" so a future category
+          // without a dedicated page still falls back to anchor-scrolling.
+          const isExperience = ["flower", "hash", "gummies"].includes(category.id);
           const LinkComponent = isExperience ? Link : "a";
           const href = isExperience
             ? `/catalog/${category.id}`

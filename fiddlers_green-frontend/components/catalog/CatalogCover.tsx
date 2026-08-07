@@ -26,7 +26,11 @@ export default function CatalogCover({
           role="list"
         >
           {categories.map((category) => {
-            const isExperience = category.id === "gummies";
+            // Phase 17 — every category now has its own dedicated page
+            // (Flower/Hash joined Gummies here); this list stays explicit
+            // rather than "always true" so a future category without one
+            // still falls back to anchor-scrolling by default.
+            const isExperience = ["flower", "hash", "gummies"].includes(category.id);
             const LinkComponent = isExperience ? Link : "a";
             const href = isExperience
               ? `/catalog/${category.id}`

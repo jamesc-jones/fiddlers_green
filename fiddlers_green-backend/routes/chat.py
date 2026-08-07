@@ -1,7 +1,11 @@
+import logging
+
 from fastapi import APIRouter, HTTPException
 
 from models.chat import ChatRequest, ChatResponse
 from services.ai_service import get_budtender_response
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -13,8 +17,8 @@ async def chat(request: ChatRequest) -> ChatResponse:
 
     try:
         reply = await get_budtender_response(request.message)
-    except Exception as error:
-        print(f"Failed to get AI response: {error}")
+    except Exception:
+        logger.exception("Failed to get AI response")
         raise HTTPException(
             status_code=502,
             detail="Failed to reach the assistant. Please try again later.",

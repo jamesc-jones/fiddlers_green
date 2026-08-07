@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { useRequireAuth } from "@/hooks/useRequireAuth";
-import { getJson, postJson } from "@/lib/api";
+import { deleteJson, getJson, postJson, putJson } from "@/lib/api";
 
 interface Product {
   id: string;
@@ -11,8 +11,10 @@ interface Product {
   description: string | null;
   dosage: string | null;
   pricing: string | null;
+  price: string | null;
   is_active: boolean;
   variant_option: string | null;
+  sku: string | null;
 }
 
 const inputClasses =
@@ -25,12 +27,29 @@ export default function AdminProductsView() {
   const [name, setName] = useState("");
   const [category, setCategory] = useState("");
   const [pricing, setPricing] = useState("");
+  // Phase 17 — required: the cart computes totals from this numeric field,
+  // not from `pricing` (a display-only string). Previously missing from
+  // this form entirely, which let products be created with no usable
+  // price and silently broke cart totals for anyone who added them.
+  const [price, setPrice] = useState("");
   // Phase 16.2 — only meaningful for gummy configuration products
   // (category="gummies"); left blank for every other product, same as
   // the backend leaves both columns NULL when they're not sent.
   const [dosage, setDosage] = useState("");
   const [variantOption, setVariantOption] = useState("");
   const [error, setError] = useState("");
+
+  // Phase 17 — Step 1B: minimal inline edit, price only. Keyed by product
+  // id so at most one row is ever in edit mode; reuses the existing
+  // PUT /admin/products/{id} endpoint (already supports partial updates
+  // and already validates price > 0 — see Step 1A), not a new route.
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editPrice, setEditPrice] = useState("");
+  // Phase 17 — Step 1C: optional staff-facing identifier, edited alongside
+  // price. Left blank means "leave unchanged" (sent as undefined, matching
+  // the create form's existing optional-field pattern below) — there's no
+  // way to explicitly clear an existing sku from this minimal UI.
+  const [editSku, setEditSku] = useState("");
 
   const refreshProducts = useCallback(async () => {
     if (!token) return;
@@ -60,6 +79,7 @@ export default function AdminProductsView() {
           name,
           category,
           pricing: pricing || undefined,
+          price,
           dosage: dosage || undefined,
           variant_option: variantOption || undefined,
         },
@@ -68,11 +88,46 @@ export default function AdminProductsView() {
       setName("");
       setCategory("");
       setPricing("");
+      setPrice("");
       setDosage("");
       setVariantOption("");
       await refreshProducts();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not create product.");
+    }
+  }
+
+  function startEdit(product: Product) {
+    setError("");
+    setEditingId(product.id);
+    setEditPrice(product.price ?? "");
+    setEditSku(product.sku ?? "");
+  }
+
+  async function handleSaveEdit(productId: string) {
+    if (!token) return;
+    setError("");
+    try {
+      await putJson<Product>(
+        `/admin/products/${productId}`,
+        { price: editPrice, sku: editSku || undefined },
+        token
+      );
+      setEditingId(null);
+      await refreshProducts();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not update product.");
+    }
+  }
+
+  async function handleDeactivate(productId: string) {
+    if (!token) return;
+    setError("");
+    try {
+      await deleteJson<void>(`/admin/products/${productId}`, undefined, token);
+      await refreshProducts();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not deactivate product.");
     }
   }
 
@@ -87,7 +142,7 @@ export default function AdminProductsView() {
       <div data-testid="admin-product-list" className="border border-white/10 divide-y divide-white/10">
         {products.length > 0 ? (
           products.map((product) => (
-            <div key={product.id} className="px-4 py-3 flex items-center justify-between">
+            <div key={product.id} className="px-4 py-3 flex items-center justify-between gap-3">
               <div className="font-body text-sm text-brand-cream">
                 <p>{product.name}</p>
                 <p className="text-brand-smoke text-xs uppercase tracking-wide">
@@ -95,14 +150,85 @@ export default function AdminProductsView() {
                   {product.variant_option ? ` · ${product.variant_option}` : ""}
                   {product.dosage ? ` · ${product.dosage}` : ""}
                 </p>
+                <p className="text-brand-smoke/50 text-[10px] tracking-wide">
+                  ID: {product.id} · SKU: {product.sku ?? "No SKU"}
+                </p>
               </div>
-              <span
-                className={`font-body text-xs uppercase tracking-wide ${
-                  product.is_active ? "text-brand-gold" : "text-brand-smoke"
-                }`}
-              >
-                {product.is_active ? "Active" : "Inactive"}
-              </span>
+
+              {editingId === product.id ? (
+                <div className="flex items-center gap-2">
+                  <input
+                    aria-label={`Edit price for ${product.name}`}
+                    type="number"
+                    step="0.01"
+                    min="0.01"
+                    value={editPrice}
+                    onChange={(event) => setEditPrice(event.target.value)}
+                    className="w-24 bg-transparent border border-white/20 px-2 py-1 font-body text-sm text-brand-cream focus:outline-none focus:border-brand-gold"
+                  />
+                  <div className="flex flex-col gap-1">
+                    <input
+                      aria-label={`Edit SKU for ${product.name}`}
+                      placeholder="e.g. FG-GUM-001"
+                      value={editSku}
+                      onChange={(event) => setEditSku(event.target.value)}
+                      className="w-32 bg-transparent border border-white/20 px-2 py-1 font-body text-sm text-brand-cream focus:outline-none focus:border-brand-gold"
+                    />
+                    {/* Guidance only — not enforced. Backend validation is
+                        unchanged: any non-blank string up to 64 chars. */}
+                    <p className="text-brand-smoke/50 text-[10px] tracking-wide whitespace-nowrap">
+                      Format: BRAND-CATEGORY-NUMBER (e.g. FG-GUM-001)
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleSaveEdit(product.id)}
+                    className="font-body text-xs tracking-[0.15em] uppercase text-brand-gold hover:underline"
+                  >
+                    Save
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setEditingId(null)}
+                    className="font-body text-xs tracking-[0.15em] uppercase text-brand-smoke hover:underline"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              ) : (
+                <div className="flex items-center gap-3">
+                  <span
+                    className={`font-body text-xs uppercase tracking-wide ${
+                      product.price !== null ? "text-brand-smoke" : "text-red-400"
+                    }`}
+                  >
+                    {product.price !== null ? `$${product.price}` : "No price"}
+                  </span>
+                  <span
+                    className={`font-body text-xs uppercase tracking-wide ${
+                      product.is_active ? "text-brand-gold" : "text-brand-smoke"
+                    }`}
+                  >
+                    {product.is_active ? "Active" : "Inactive"}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => startEdit(product)}
+                    className="font-body text-xs tracking-[0.15em] uppercase text-brand-gold hover:underline"
+                  >
+                    Edit
+                  </button>
+                  {product.is_active && (
+                    <button
+                      type="button"
+                      onClick={() => handleDeactivate(product.id)}
+                      className="font-body text-xs tracking-[0.15em] uppercase text-red-400 hover:underline"
+                    >
+                      Deactivate
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
           ))
         ) : (
@@ -133,8 +259,19 @@ export default function AdminProductsView() {
           required
         />
         <input
+          aria-label="Price"
+          placeholder="Price (e.g. 15.00)"
+          type="number"
+          step="0.01"
+          min="0.01"
+          value={price}
+          onChange={(event) => setPrice(event.target.value)}
+          className={inputClasses}
+          required
+        />
+        <input
           aria-label="Pricing"
-          placeholder="Pricing (optional)"
+          placeholder="Pricing display text (optional, e.g. $15)"
           value={pricing}
           onChange={(event) => setPricing(event.target.value)}
           className={inputClasses}
