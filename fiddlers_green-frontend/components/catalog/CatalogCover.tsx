@@ -1,10 +1,10 @@
 import Link from "next/link";
-import type { Category } from "@/data/products";
+import type { CategoryMeta } from "@/data/categories";
 
 export default function CatalogCover({
   categories,
 }: {
-  categories: Category[];
+  categories: CategoryMeta[];
 }) {
   return (
     <section className="relative min-h-[70vh] md:min-h-[80vh] flex flex-col items-center justify-center overflow-hidden bg-[radial-gradient(circle_at_50%_20%,_#141d17_0%,_#0a0d0a_55%,_#000000_100%)]">

@@ -6,6 +6,7 @@ the public products router (read-only, active products only).
 """
 import uuid
 import logging
+from decimal import Decimal
 from typing import List, Optional
 
 from sqlalchemy import select
@@ -14,6 +15,36 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from db_models.product import Product
 
 logger = logging.getLogger(__name__)
+
+# Phase 16.3 — category-based placeholder images, reusing the existing
+# per-category SVGs from public/images/catalog/ (Phase 11) rather than
+# introducing new assets. Used only when a product is created without an
+# explicit image_url.
+_CATEGORY_PLACEHOLDER_IMAGES = {
+    "flower": "/images/catalog/flower.svg",
+    "hash": "/images/catalog/hash.svg",
+    "gummies": "/images/catalog/gummies.svg",
+}
+
+
+def _default_image_url(category: str) -> Optional[str]:
+    return _CATEGORY_PLACEHOLDER_IMAGES.get(category)
+
+
+# Phase 16.3.1 — weight-based variants for Flower/Hash. Reuses the same
+# (variant_option, dosage) column pair the Phase 16.2 gummy configurator
+# uses, but with the roles reversed: here `dosage` holds the base product
+# name (the group key) and `variant_option` holds the weight key (varies
+# within the group). Same columns, same partial unique index, no schema
+# change — see _check_variant_conflict below, which now guards both uses.
+# (key, display suffix, grams)
+WEIGHT_VARIANTS: list[tuple[str, str, Decimal]] = [
+    ("g", "1g", Decimal("1")),
+    ("hq", "3.5g", Decimal("3.5")),
+    ("q", "7g", Decimal("7")),
+    ("half_oz", "14g", Decimal("14")),
+    ("oz", "28g", Decimal("28")),
+]
 
 
 async def list_products(
@@ -46,7 +77,7 @@ async def get_product_by_id(session: AsyncSession, product_id: uuid.UUID) -> Opt
     return await session.get(Product, product_id)
 
 
-async def _check_gummy_variant_conflict(
+async def _check_variant_conflict(
     session: AsyncSession,
     *,
     variant_option: Optional[str],
@@ -54,13 +85,15 @@ async def _check_gummy_variant_conflict(
     exclude_id: Optional[uuid.UUID] = None,
 ) -> None:
     """
-    Phase 16.2: a gummy configuration (variant_option + dosage) must
-    resolve to exactly one Product. This mirrors the partial unique index
-    on the same two columns (see the Phase 16.2 migration) so a conflict
-    is caught here, before the DB constraint would raise a raw
-    IntegrityError, giving the admin a clear 409 instead. Only runs when
-    both fields are actually set — every non-gummy-configuration product
-    (Flowers, Hash, named Gummies) leaves both NULL and is never checked.
+    Phase 16.2 (gummy configurations) and Phase 16.3.1 (Flower/Hash weight
+    variants) both rely on (variant_option, dosage) resolving to exactly
+    one Product — see WEIGHT_VARIANTS above for the reversed column roles
+    used by weight variants. This mirrors the partial unique index on the
+    same two columns (see the Phase 16.2 migration) so a conflict is
+    caught here, before the DB constraint would raise a raw
+    IntegrityError, giving the caller a clear 409 instead. Only runs when
+    both fields are actually set — every product outside these two
+    variant schemes leaves both NULL and is never checked.
     """
     if not variant_option or not dosage:
         return
@@ -74,17 +107,19 @@ async def _check_gummy_variant_conflict(
     existing = (await session.execute(query)).scalars().first()
     if existing is not None:
         raise ValueError(
-            f"A gummy product with variant_option={variant_option!r} and "
+            f"A product with variant_option={variant_option!r} and "
             f"dosage={dosage!r} already exists (id={existing.id})."
         )
 
 
 async def create_product(session: AsyncSession, **fields) -> Product:
-    await _check_gummy_variant_conflict(
+    await _check_variant_conflict(
         session,
         variant_option=fields.get("variant_option"),
         dosage=fields.get("dosage"),
     )
+    if not fields.get("image_url"):
+        fields["image_url"] = _default_image_url(fields.get("category", ""))
     product = Product(**fields)
     session.add(product)
     await session.commit()
@@ -100,7 +135,7 @@ async def create_product(session: AsyncSession, **fields) -> Product:
 
 
 async def update_product(session: AsyncSession, product: Product, **fields) -> Product:
-    await _check_gummy_variant_conflict(
+    await _check_variant_conflict(
         session,
         variant_option=fields.get("variant_option", product.variant_option),
         dosage=fields.get("dosage", product.dosage),
@@ -126,3 +161,51 @@ async def soft_delete_product(session: AsyncSession, product: Product) -> None:
     product.is_active = False
     await session.commit()
     logger.info("Product soft-deleted: id=%s name=%s", product.id, product.name)
+
+
+async def create_weight_variant_products(
+    session: AsyncSession,
+    *,
+    name: str,
+    category: str,
+    description: Optional[str],
+    price_per_gram: Decimal,
+) -> List[Product]:
+    """
+    Phase 16.3.1. Creates one Product row per entry in WEIGHT_VARIANTS for
+    a single Flower/Hash base product. `dosage` holds the base name (the
+    group key grouped on by the frontend's catalogGrouping helper);
+    `variant_option` holds the weight key — the reverse of the Phase 16.2
+    gummy convention, see the WEIGHT_VARIANTS comment above.
+
+    All 5 conflict checks run before any row is created, so a conflict on
+    (say) the 3rd weight leaves zero rows written — no partial variant
+    sets for a base name that already partly exists.
+    """
+    for weight_key, _suffix, _grams in WEIGHT_VARIANTS:
+        await _check_variant_conflict(
+            session,
+            variant_option=weight_key,
+            dosage=name,
+        )
+
+    image_url = _default_image_url(category)
+    products = [
+        Product(
+            name=f"{name} - {suffix}",
+            category=category,
+            description=description,
+            dosage=name,
+            price=(price_per_gram * grams).quantize(Decimal("0.01")),
+            variant_option=weight_key,
+            image_url=image_url,
+        )
+        for weight_key, suffix, grams in WEIGHT_VARIANTS
+    ]
+    session.add_all(products)
+    await session.commit()
+    logger.info(
+        "Weight variants created: base_name=%s category=%s count=%d",
+        name, category, len(products),
+    )
+    return products

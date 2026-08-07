@@ -1,11 +1,31 @@
+"use client";
+
+// Phase 16.3 — this is now a client component with its own lightweight
+// GET /products fetch, deliberately separate from InteractiveCatalog's
+// fetch of the same endpoint. A shared-fetch refactor of the whole page's
+// component tree was considered and rejected as higher-risk than a
+// duplicated cheap request (see Phase 16.3 planning notes). Item counts
+// use the same groupProductsForDisplay helper as CategorySection so the
+// two can never drift out of sync.
+import { useEffect, useState } from "react";
 import Link from "next/link";
-import type { Category } from "@/data/products";
+import type { CategoryMeta } from "@/data/categories";
+import { getJson } from "@/lib/api";
+import { groupProductsForDisplay, type PublicProduct } from "@/lib/catalogGrouping";
 
 export default function TableOfContents({
   categories,
 }: {
-  categories: Category[];
+  categories: CategoryMeta[];
 }) {
+  const [products, setProducts] = useState<PublicProduct[] | null>(null);
+
+  useEffect(() => {
+    getJson<PublicProduct[]>("/products")
+      .then(setProducts)
+      .catch(() => setProducts([]));
+  }, []);
+
   return (
     <nav
       aria-label="Catalog contents"
@@ -27,6 +47,7 @@ export default function TableOfContents({
           const href = isExperience
             ? `/catalog/${category.id}`
             : `#${category.anchor}`;
+          const itemCount = products ? groupProductsForDisplay(products, category.id).length : null;
 
           return (
             <li key={category.id}>
@@ -45,7 +66,7 @@ export default function TableOfContents({
                   aria-hidden="true"
                 />
                 <span className="hidden sm:inline font-body text-xs text-white/30 uppercase tracking-[0.15em]">
-                  {category.products.length} items
+                  {itemCount !== null ? `${itemCount} items` : "..."}
                 </span>
               </LinkComponent>
             </li>

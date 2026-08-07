@@ -44,12 +44,14 @@ Key versions actually installed: Next.js 16.2.10, React 19.2.4. The App Router (
 
 ### Current state
 
-All primary routes are implemented and validated. Phases 1–16 are complete; the current completed milestone is Phase 16 — Product Catalog Integration (via Phase 16.1 Catalog Cart Integration and Phase 16.2 Gummy Variant Cart Integration). Phase 16.3 (Backend-Driven Catalog Evolution) is deferred — not started. The next active phase is Phase 17 — Final Production Polish + QA + Deploy Ready. See `PHASES_14_15_16_ROADMAP_AND_TUTORIALS.md` for the Phase 16 completion record and `PHASES_17_18_ROADMAP_AND_TUTORIALS.md` for Phases 17–18.
+All primary routes are implemented and validated. Phases 1–17 are complete, and Phase 16.3 (Backend-Driven Catalog Evolution, including Phase 16.3.1 Weight-Based Variants) — previously deferred — is now also complete; see [Phase 16.3 Completed](#phase-163-completed--backend-driven-catalog--weight-based-variants) below. The next engineering gate is Phase 17.5 — Final Production Readiness Audit, a checklist-only validation before Phase 18 deployment begins. Phase 18 has NOT started. See `PHASES_14_15_16_ROADMAP_AND_TUTORIALS.md` for the original Phase 16 completion record and `PHASES_17_18_ROADMAP_AND_TUTORIALS.md` for Phases 17–18 including the Phase 17.5 gate.
 
 **Route status:**
 - `/` — Hero section (Phase 3) plus a skippable cinematic intro sequence on first visit per session (Phase 9)
-- `/catalog` — Editorial catalog with categories, product cards, hover effects, Add to Cart buttons for authenticated users (Phases 4, 16.1)
+- `/catalog` — Editorial catalog with categories, product cards, hover effects, Add to Cart buttons for authenticated users; renders entirely from `GET /products`, including grouped weight-variant cards for Flower/Hash (Phases 4, 16.1, 16.3)
 - `/catalog/gummies` — Interactive two-stage Haney Pot strength selector; selection resolves to a backend Product UUID and adds to cart (Phases 5, 16.2)
+- `/catalog/flower` — Dedicated Flower category page; renders from `GET /products?category=flower` (Phase 16.3)
+- `/catalog/hash` — Dedicated Hash category page; renders from `GET /products?category=hash` (Phase 16.3)
 - `/catalog/gummies/[strength]` — Redirects to `/catalog/gummies`
 - `/catalog/[category]` — Redirects to `/catalog`
 - `/heritage` — Full cultural storytelling page with timeline (Phase 6)
@@ -66,8 +68,8 @@ All primary routes are implemented and validated. Phases 1–16 are complete; th
 - `components/Hero.tsx` — Homepage hero with northern lights atmosphere (Phase 7); accepts a `skipEntrance` prop so it can render already-settled when the Phase 9 intro owns the reveal
 - `components/HomeClient.tsx` — Client orchestrator for `/`; decides whether the intro plays and coordinates it with `Hero` (Phase 9)
 - `components/IntroSequence/` — Cinematic intro overlay: `index.tsx`, `SkipButton`, `LogoReveal`, `FeatherSVG`, `ChainFormation`, `WampumReveal` (Phase 9)
-- `components/catalog/` — CatalogCover, CategorySection, ProductCard (with Add to Cart), TableOfContents, CategoryEffect (Phases 4, 16.1)
-- `components/catalog/gummies/` — GummiesHero, GummiesEntrySelector, StrengthSelector, EntryOptionCard, StrengthButton; selection flow resolves to a backend Product UUID (Phases 5, 16.2)
+- `components/catalog/` — CatalogCover, CategorySection, ProductCard (with Add to Cart), TableOfContents, CategoryEffect, WeightVariantActions, InteractiveCatalog, CatalogProductActions (Phases 4, 16.1, 16.3)
+- `components/catalog/gummies/` — GummiesHero, GummiesEntrySelector, StrengthSelector, EntryOptionCard, StrengthButton, GummyVariantActions; selection flow resolves to a backend Product UUID (Phases 5, 16.2)
 - `components/heritage/` — HeritageHero, ChapterSection, TwoRowWampum, CovenantChain, TyendinagaHistory, HeritageTimeline, HeritageDivider
 - `components/contact/ContactForm.tsx` — Contact form, posts to backend `/contact` (Phase 10)
 - `components/chat/ChatWidget.tsx` — AI Budtender chat UI, posts to backend `/chat` (Phase 10)
@@ -77,27 +79,33 @@ All primary routes are implemented and validated. Phases 1–16 are complete; th
 - `components/account/AccountView.tsx` — Authenticated customer profile display (Phase 15.1)
 - `components/admin/AdminProductsView.tsx` — Admin product CRUD UI; requires admin JWT (Phase 15.1)
 - `components/cart/CartView.tsx` — Authenticated cart display with product name, category, quantity, and remove controls (Phase 16.1)
+- `components/cart/ProductListing.tsx` — Product listing sub-component within the cart view (Phase 16.3)
 
 **Data layer:**
-- `data/products.ts` — Static typed catalog data (CATEGORIES array, Product and Category types); still the source of truth for catalog rendering — will be replaced by `GET /products` in Phase 16.3
+- `data/categories.ts` — category metadata (`CATEGORIES_META`: id, label, description, anchor); no product data (Phase 16.3)
+- `data/weights.ts` — Flower/Hash weight variant keys/labels/order, matching the backend `WEIGHT_VARIANTS` constant (Phase 16.3.1)
+- `lib/catalogGrouping.ts` — shared `PublicProduct` type and `groupProductsForDisplay()`, used by both catalog rendering and item counts (Phase 16.3)
 - `data/strengths.ts` — Gummy strength options (STRENGTHS const, Strength type)
 - `data/entryOptions.ts` — Gummy entry options (ENTRY_OPTIONS const, EntryOptionId type)
 - `lib/api.ts` — `postJson`, `getJson`, `deleteJson` helpers against `NEXT_PUBLIC_BACKEND_URL`; all support an optional Bearer token (Phase 10, extended Phase 15)
 - `hooks/useChatMessages.ts` — shared message state and `sendMessage` logic; consumed by both `ChatWidget` and `FloatingChat` (Phase 12)
 - `contexts/AuthContext.tsx` — global auth state (user, token, isAdmin, login, register, logout); JWT persisted in `localStorage` under key `fg_auth_token`; token validated against `/auth/me` on mount (Phase 15.1)
+- `contexts/CartContext.tsx` — global cart state (item count, add/remove operations); consumed by `ProductCard`, `CartView`, and the `Navbar` cart badge; backed by `POST /cart/add` and `DELETE /cart/remove` (Phase 16.1)
 - `hooks/useRequireAuth.ts` — redirect-to-login guard for protected pages; accepts an optional role constraint (Phase 15.1)
 
 **Backend data layer (Phases 14–16):**
 - `fiddlers_green-backend/database.py` — async SQLAlchemy engine, `AsyncSessionLocal` session factory, `Base` declarative class, `get_db()` FastAPI dependency
-- `fiddlers_green-backend/db_models/` — SQLAlchemy ORM models: `ContactSubmission`, `Product` (with `price NUMERIC(10,2)`, `image_url`, `variant_option`, `dosage`, `is_active`), `User`, `CartItem`
-- `fiddlers_green-backend/repositories/` — `contact.py` (`save_contact_submission()`), `user.py` (`create_user()`, `get_user_by_email()`), `cart.py` (`get_cart()`, `add_to_cart()`, `remove_from_cart()`)
+- `fiddlers_green-backend/db_models/` — SQLAlchemy ORM models: `ContactSubmission`, `Product` (with `price NUMERIC(10,2)`, `image_url`, `product_type`, `variant_option`, `dosage`, `sku`, `is_active`), `User`, `CartItem`
+- `fiddlers_green-backend/repositories/` — `contact.py` (`save_contact_submission()`), `user.py` (`create_user()`, `get_user_by_email()`), `cart.py` (`get_cart()`, `add_to_cart()`, `remove_from_cart()`), `product.py` (`create_product()`, `update_product()`, `soft_delete_product()`, `create_weight_variant_products()`, `_check_variant_conflict()` shared by both gummy and weight-variant creation)
 - `fiddlers_green-backend/dependencies/auth.py` — `get_current_user()`, `require_admin()`, `require_customer()` FastAPI dependency guards
 - `fiddlers_green-backend/services/auth_service.py` — `hash_password()`, `verify_password()`, `create_access_token()`, `decode_access_token()` (bcrypt + python-jose)
 - `fiddlers_green-backend/routes/auth.py` — `POST /auth/register`, `POST /auth/login`, `GET /auth/me`
-- `fiddlers_green-backend/routes/admin.py` — `POST/GET/PUT/DELETE /admin/products` (admin JWT required)
+- `fiddlers_green-backend/routes/admin.py` — `POST/GET/PUT/DELETE /admin/products`, `POST /admin/products/weight-variants` (admin JWT required)
 - `fiddlers_green-backend/routes/customer.py` — `GET /customer/me`, `GET /customer/orders` (scaffold: returns `[]`)
 - `fiddlers_green-backend/routes/cart.py` — `GET /cart`, `POST /cart/add`, `DELETE /cart/remove` (customer JWT required; ownership enforced via JWT `user_id`, never the request body)
-- `fiddlers_green-backend/alembic/` + `alembic.ini` — async Alembic migrations; chain: `483f420bc9c8_initial_schema` → `65be7bc486c3_add_cart_items` (and additional Phase 16 price/variant migrations)
+- `fiddlers_green-backend/routes/products.py` — `GET /products` (public, no auth required); returns active products only; filterable by `category` and `search` query params; used by all frontend catalog rendering (Phase 16.3)
+- `fiddlers_green-backend/logging_config.py` — structured logging configuration; imported by `main.py`; sets up JSON-structured log output for production observability (Phase 17)
+- `fiddlers_green-backend/alembic/` + `alembic.ini` — async Alembic migrations; chain: `483f420bc9c8_initial_schema` → `65be7bc486c3_add_cart_items` → ... → `24792483e658_add_product_sku` → `f3a9d2c81b47_add_product_image_type_and_fix_category` (Phase 16.3)
 - `fiddlers_green-backend/entrypoint.sh` — runs `alembic upgrade head` before starting uvicorn; degrades gracefully (logs a warning, still starts the server) if the DB is unavailable at container startup, rather than crashing
 
 ## Phase 2 Completed — Layout & Navbar Foundation
@@ -628,7 +636,8 @@ Phase 16 — Product Catalog Integration
     |
     +-- Phase 16.2 — Gummy Variant Cart Integration   ✅ COMPLETE
     |
-    +-- Phase 16.3 — Backend-Driven Catalog Evolution  ⏳ NOT STARTED (deferred)
+    +-- Phase 16.3 — Backend-Driven Catalog Evolution  ✅ COMPLETE
+    |       +-- Phase 16.3.1 — Weight-Based Variants   ✅ COMPLETE
 ```
 
 ### Phase 16.1 — Catalog Cart Integration
@@ -661,35 +670,128 @@ Extended the Phase 5 two-stage gummy selector (entry option + strength) so each 
 - ✅ Quantity controls validated for gummy variants
 - ✅ Cart display validated — gummy variant products display correctly in `CartView`
 
-### Architectural decision — why Phase 16.3 is deferred, not a gap
+### Architectural decision — the Phase 16.1/16.2 transitional design (superseded by Phase 16.3)
 
-The current architecture is a valid, intentional transitional design:
+Phase 16.1/16.2 deliberately kept the cart backend-driven while catalog *rendering* stayed on the static `data/products.ts` path, to reduce surface area while the higher-risk cart integration work was validated:
 
 ```
-Current (Phase 16.1 / 16.2 — valid transitional architecture):
+Phase 16.1 / 16.2 (transitional):
 
 Backend Product ──> Cart System
 Frontend Static Catalog ──(name-matched)──> Backend Product
 
-Future (Phase 16.3):
+Phase 16.3 (current architecture):
 
 Backend Product ──> Cart System
-                └──> Catalog Rendering   (replaces data/products.ts)
+                └──> Catalog Rendering
 ```
 
-The cart system is fully backend-driven. The catalog display is not. This split reduced the Phase 16 surface area by keeping catalog rendering on the stable static path while the higher-risk cart integration work was validated. Phase 16.3 extends what Phase 16.1/16.2 built; it does not correct it. It does not block Phase 17.
+Phase 16.3 completed this: catalog rendering is now backend-driven end to end, and `data/products.ts` has been deleted. See [Phase 16.3 Completed](#phase-163-completed--backend-driven-catalog--weight-based-variants) below.
 
-### Known state carried into Phase 17
-- `data/products.ts` is still the source of truth for catalog rendering — replaced in Phase 16.3.
-- Product images are not yet backend-supplied — replaced in Phase 16.3.
-- `GET /products` public endpoint exists (returns active products with `price`, `image_url`, `variant_option`) but is not yet consumed by the frontend catalog rendering path.
-- `DELETE /cart/remove` uses a JSON request body on a DELETE request — a known deviation from strict REST convention, accepted and documented; deferred to a cleanup phase.
+### Known state carried into Phase 17 (resolved in Phase 16.3)
+- ~~`data/products.ts` is still the source of truth for catalog rendering~~ — resolved: file deleted, catalog renders from `GET /products`.
+- ~~Product images are not yet backend-supplied~~ — resolved: `Product.image_url`, backfilled/defaulted per category.
+- ~~`GET /products` exists but is not yet consumed by the frontend catalog rendering path~~ — resolved: it is now the sole source.
+- `DELETE /cart/remove` uses a JSON request body on a DELETE request — a known deviation from strict REST convention, accepted and documented; deferred to a cleanup phase. Not touched by Phase 16.3.
 
 ---
 
-## Phase 17 — Final Production Polish + QA + Deploy Ready
+## Phase 16.3 Completed — Backend-Driven Catalog + Weight-Based Variants
+
+Phase 16.3 replaced the frontend's static `data/products.ts` with live backend data end to end, and (as Phase 16.3.1) added Flower/Hash weight-based variants with derived pricing. No changes to auth, RBAC, cart ownership rules, or Phase 17 hardening.
+
+### Phase 16.3 Core — Backend-Driven Catalog Evolution
+
+**Backend:**
+- `db_models/product.py` — added `image_url` (`String(500)`, nullable) and `product_type` (`String(100)`, nullable), mirroring `dosage`'s shape.
+- `models/product.py` — `KNOWN_CATEGORIES = {"flower", "hash", "gummies"}`; category fields on all four schemas now validate against this set (previously unvalidated free text — see the Pink Kush/White Widow bug below). `image_url`/`product_type` added to all four schemas.
+- `repositories/product.py` — `create_product` fills a category-based placeholder `image_url` (reusing the existing `public/images/catalog/*.svg` assets) whenever one isn't supplied.
+- Migration `f3a9d2c81b47_add_product_image_type_and_fix_category` — adds the two columns; backfills `image_url` for every row by category; backfills `product_type` for the 11 original named catalog products (exact-name match) from the values that used to live only in `data/products.ts`; fixes a pre-existing data bug found during the Phase 16.3 audit where two rows ("Pink Kush", "White Widow") had `category="Flower"` instead of `"flower"` — harmless as a display label, but a functional bug once category becomes a live filter key.
+
+**Frontend:**
+- `data/categories.ts` (new) — category metadata only (`id`, `label`, `description`, `anchor`); replaces the `CATEGORIES` array from the now-deleted `data/products.ts`.
+- `lib/catalogGrouping.ts` (new) — shared `PublicProduct` type and `groupProductsForDisplay(products, categoryId)`, used by both `CategorySection` (rendering) and `TableOfContents` (item counts) so they can't drift apart. For `gummies`, filters out dosage-configuration rows (`variant_option` set) — those stay reachable only via `/catalog/gummies`, reproducing the pre-16.3 catalog exactly. For `flower`/`hash`, groups weight-variant rows by `dosage` into one card per base product (see 16.3.1 below).
+- `components/catalog/InteractiveCatalog.tsx`, `CategorySection.tsx`, `ProductCard.tsx`, `CatalogProductActions.tsx` — rewritten to render directly from `GET /products` instead of matching backend data against static content.
+- `components/catalog/CatalogCover.tsx` — now takes `CategoryMeta[]`.
+- `components/catalog/TableOfContents.tsx` — now a client component with its own `GET /products` fetch for item counts (a deliberate small duplicate fetch, chosen over restructuring the page's fetch architecture).
+- `app/catalog/page.tsx`, `app/catalog/flower/page.tsx`, `app/catalog/hash/page.tsx` — use `data/categories.ts`.
+- `components/admin/AdminProductsView.tsx` — Category input changed from free text to a `<select>` (matches `KNOWN_CATEGORIES`, avoiding constant 422s now that the backend validates it); added optional Image URL / Product Type inputs to the create form.
+- `data/products.ts` deleted — all 9 consumers migrated and verified first.
+
+### Phase 16.3.1 — Weight-Based Variants + Derived Pricing
+
+Reuses the existing `(variant_option, dosage)` column pair and its partial unique index from Phase 16.2 — no new table, no schema expansion beyond the two Core columns above. For Flower/Hash weight variants the column roles are **reversed** from the Gummies convention: `dosage` holds the base product name (the group key), `variant_option` holds the weight key (`g`/`hq`/`q`/`half_oz`/`oz`, varies within the group). Same columns, same index, both uses protected by one now-generalized conflict check.
+
+- `repositories/product.py` — `_check_gummy_variant_conflict` generalized to `_check_variant_conflict` (still runs for both Gummies and weight-variant creation); `WEIGHT_VARIANTS` constant (key, display suffix, grams for 1g/3.5g/7g/14g/28g); `create_weight_variant_products()` pre-validates all 5 combinations before creating any row (atomic — a conflict on one weight leaves zero rows written, not a partial set).
+- `models/product.py` — `WeightVariantCreateRequest` (`name`, `category: Literal["flower","hash"]`, `description`, `price_per_gram`).
+- `routes/admin.py` — `POST /admin/products/weight-variants` (admin-only), creates 5 `Product` rows, price per variant = `price_per_gram × grams` quantized to 2 decimals. No checkout/payment system introduced; cart continues to receive normal `Product` UUIDs, no special-casing.
+- `data/weights.ts` (new) — weight keys/labels/order, matching the backend `WEIGHT_VARIANTS` constant exactly.
+- `components/catalog/WeightVariantActions.tsx` (new) — inline weight picker + Add to Cart for a grouped Flower/Hash card; selecting a weight resolves directly to that variant's `Product` UUID.
+- `components/catalog/ProductCard.tsx` — branches between `CatalogProductActions` (flat product) and `WeightVariantActions` (grouped) based on the `DisplayItem` kind from `groupProductsForDisplay`.
+- `components/admin/AdminProductsView.tsx` — second form, "Add Weight Variants (Flower / Hash)", posts to the new endpoint.
+
+### Validation completed
+- Backend: migration applied cleanly against live data (verified via `psql` — category casing fixed, `image_url`/`product_type` backfilled correctly for all 11 named products); `curl` smoke tests for `GET /products?category=...`, weight-variant creation (5 rows, correct derived prices), duplicate weight-variant creation (409, confirmed zero partial rows), gummy variant conflict check (still 409 — regression-safe), invalid category rejection (422), RBAC on the new endpoint (non-admin → 403, unauthenticated cart → 401).
+- Frontend: `npm run lint`, `npx tsc --noEmit`, `npm run build` all clean; all 17 routes generated.
+- Live (Docker, browser-verified): `/catalog` renders all three categories from the backend (Flower correctly includes the previously-miscategorized Pink Kush/White Widow); admin-created weight variants appear as a single grouped card with a working weight picker and live price update; add-to-cart verified end-to-end for both a flat product and a weight variant (cart line item showed "Sacred Pine - 3.5g" at the correct derived price); gummy configurator flow (`/catalog/gummies`) verified unaffected — resolves to the correct backend Product and price exactly as before.
+- Pre-existing stale test-artifact products from earlier phases' QA (e.g. "Playwright Test Gummy", "Phase16 New Product") that were still `is_active=true` were deactivated via the existing soft-delete endpoint — they were invisible before Phase 16.3 (static catalog didn't reference them) but would have leaked into the live storefront once rendering became backend-driven.
+
+### Regression check
+- Phase 17 hardening: untouched (input validation, logging, timing-attack fix, structured logging all unchanged).
+- Auth/RBAC: unchanged; verified non-admin requests to `/admin/products` and the new weight-variants endpoint both return 403.
+- Cart ownership: unchanged; verified unauthenticated `/cart` access returns 401.
+- Gummy variant flow: unchanged and verified live (see Validation above).
+- No Phase 17.5 or Phase 18 work performed.
+
+---
+
+## Phase 17 Completed — Production Readiness Hardening
+
+**Status: COMPLETE**
+**Git tag:** Phase 17 completion tag created locally; latest Phase 17 commit pushed.
+
+Phase 17 was a hardening and validation pass. No new routes, models, or frontend components were added. All existing API contracts are unchanged.
+
+### Completed areas
+
+- ✅ Error Handling — graceful degradation on DB offline and Anthropic API unavailable; no unhandled exceptions reaching the client
+- ✅ Input Validation Hardening — Pydantic models tightened; edge cases for malformed UUIDs, empty payloads, and out-of-range quantities confirmed handled
+- ✅ Security Review — JWT secret non-default in all environments; admin routes return 403/401 correctly; passwords never returned in any response
+- ✅ Observability & Logging — structured logging for cart, auth, product, and contact paths; fire-and-forget failures logged without crashing the request
+- ✅ Performance & Efficiency — response time targets met; no N+1 query regressions
+- ✅ UX Polish — loading, error, and empty states consistent across auth, cart, and catalog flows; auth guard redirect timing correct
+- ✅ QA Validation — all flows below validated end-to-end
+
+### Validated flows
+
+- ✅ Authentication (register → login → token → `/auth/me`)
+- ✅ RBAC enforcement (customer token blocked on `/admin/*`)
+- ✅ Admin CRUD (`POST/GET/PUT/DELETE /admin/products`)
+- ✅ Cart operations (add, increment, remove, view)
+- ✅ Cart isolation (user A cannot access user B's cart)
+- ✅ Gummy variant → cart flow (entry option + strength → UUID → cart)
+- ✅ Logout/login persistence (`localStorage` cleared on logout)
+- ✅ Public route validation (no auth required on `/`, `/catalog`, `/heritage`, `/contact`, `/chat`)
+- ✅ Frontend lint + build (`npm run lint`, `npx tsc --noEmit`, `npm run build`)
+
+---
+
+## Phase 17.5 — Final Production Readiness Audit
 
 **Status: NOT STARTED**
-**Prerequisite:** Phase 16 complete and validated (it is).
+**Prerequisite:** Phase 17 complete and validated (it is).
 
-See `PHASES_17_18_ROADMAP_AND_TUTORIALS.md` for the full Phase 17 spec, including: frontend–backend contract validation, end-to-end Playwright testing, error handling validation, performance targets, security validation, `docker-compose.prod.yml` authoring, deployment readiness, and rollback verification.
+This is a checklist-only validation gate — not a feature phase. No code changes, no new infrastructure, no refactoring. The sole output is a readiness decision: *"Ready to proceed to Phase 18 deployment."*
+
+Scope covers: `docker-compose.prod.yml` verification, environment variable completeness, secrets handling, health checks, container restart behavior, volume persistence, migration behavior, production build and startup verification, rollback procedure, security final review (CORS, JWT config, admin controls, no committed secrets), and operational readiness (logs, failure scenarios, monitoring expectations).
+
+See `PHASES_17_18_ROADMAP_AND_TUTORIALS.md` for the full Phase 17.5 checklist and readiness decision criteria.
+
+---
+
+## Phase 18 — VPS Deployment / DigitalOcean Production
+
+**Status: NOT STARTED**
+**Prerequisite:** Phase 17.5 readiness decision confirmed.
+
+See `PHASES_17_18_ROADMAP_AND_TUTORIALS.md` for the full Phase 18 VPS provisioning, Nginx, SSL, and deployment spec.

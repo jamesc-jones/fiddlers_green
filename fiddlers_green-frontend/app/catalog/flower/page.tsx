@@ -1,9 +1,9 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { CATEGORIES } from "@/data/products";
+import { CATEGORIES_META } from "@/data/categories";
 import InteractiveCatalog from "@/components/catalog/InteractiveCatalog";
 
-const category = CATEGORIES.find((c) => c.id === "flower")!;
+const category = CATEGORIES_META.find((c) => c.id === "flower")!;
 
 export const metadata: Metadata = {
   title: category.label,

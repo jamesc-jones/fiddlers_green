@@ -15,7 +15,16 @@ interface Product {
   is_active: boolean;
   variant_option: string | null;
   sku: string | null;
+  image_url: string | null;
+  product_type: string | null;
 }
+
+// Phase 16.3 — matches backend models/product.py's KNOWN_CATEGORIES.
+// Previously a free-text input; now that the frontend catalog renders
+// live from this same category value (and the backend rejects anything
+// outside this set with a 422), a free-text field would just be constant
+// admin friction — same reasoning as the Phase 17 inquiry_type fix.
+const KNOWN_CATEGORIES = ["flower", "hash", "gummies"] as const;
 
 const inputClasses =
   "w-full bg-transparent border border-white/20 px-4 py-3 font-body text-brand-cream focus:outline-none focus:border-brand-gold";
@@ -37,7 +46,24 @@ export default function AdminProductsView() {
   // the backend leaves both columns NULL when they're not sent.
   const [dosage, setDosage] = useState("");
   const [variantOption, setVariantOption] = useState("");
+  // Phase 16.3 — optional; backend fills a category-based placeholder
+  // image and leaves product_type NULL when omitted, same as before this
+  // form could set them at all.
+  const [imageUrl, setImageUrl] = useState("");
+  const [productType, setProductType] = useState("");
   const [error, setError] = useState("");
+
+  // Phase 16.3.1 — separate form/state for weight-variant creation. Kept
+  // entirely independent from the fields above: this posts to a different
+  // endpoint (POST /admin/products/weight-variants) and creates 5 rows at
+  // once rather than editing the single-product create form's shape.
+  const [weightName, setWeightName] = useState("");
+  const [weightCategory, setWeightCategory] = useState<"flower" | "hash">("flower");
+  const [weightDescription, setWeightDescription] = useState("");
+  const [pricePerGram, setPricePerGram] = useState("");
+  const [isCreatingWeightVariants, setIsCreatingWeightVariants] = useState(false);
+  const [weightError, setWeightError] = useState("");
+  const [weightSuccess, setWeightSuccess] = useState("");
 
   // Phase 17 — Step 1B: minimal inline edit, price only. Keyed by product
   // id so at most one row is ever in edit mode; reuses the existing
@@ -91,6 +117,8 @@ export default function AdminProductsView() {
           price,
           dosage: dosage || undefined,
           variant_option: variantOption || undefined,
+          image_url: imageUrl || undefined,
+          product_type: productType || undefined,
         },
         token
       );
@@ -100,11 +128,42 @@ export default function AdminProductsView() {
       setPrice("");
       setDosage("");
       setVariantOption("");
+      setImageUrl("");
+      setProductType("");
       await refreshProducts();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not create product.");
     } finally {
       setIsCreating(false);
+    }
+  }
+
+  async function handleCreateWeightVariants(event: FormEvent) {
+    event.preventDefault();
+    if (!token) return;
+    setWeightError("");
+    setWeightSuccess("");
+    setIsCreatingWeightVariants(true);
+    try {
+      await postJson<Product[]>(
+        "/admin/products/weight-variants",
+        {
+          name: weightName,
+          category: weightCategory,
+          description: weightDescription || undefined,
+          price_per_gram: pricePerGram,
+        },
+        token
+      );
+      setWeightSuccess(`Created 5 weight variants for "${weightName}".`);
+      setWeightName("");
+      setWeightDescription("");
+      setPricePerGram("");
+      await refreshProducts();
+    } catch (err) {
+      setWeightError(err instanceof Error ? err.message : "Could not create weight variants.");
+    } finally {
+      setIsCreatingWeightVariants(false);
     }
   }
 
@@ -163,7 +222,8 @@ export default function AdminProductsView() {
               <div className="font-body text-sm text-brand-cream">
                 <p>{product.name}</p>
                 <p className="text-brand-smoke text-xs uppercase tracking-wide">
-                  {product.category} {product.pricing ? `· ${product.pricing}` : ""}
+                  {product.category} {product.product_type ? `· ${product.product_type}` : ""}
+                  {product.pricing ? ` · ${product.pricing}` : ""}
                   {product.variant_option ? ` · ${product.variant_option}` : ""}
                   {product.dosage ? ` · ${product.dosage}` : ""}
                 </p>
@@ -270,14 +330,22 @@ export default function AdminProductsView() {
           className={inputClasses}
           required
         />
-        <input
+        <select
           aria-label="Category"
-          placeholder="Category"
           value={category}
           onChange={(event) => setCategory(event.target.value)}
           className={inputClasses}
           required
-        />
+        >
+          <option value="" disabled>
+            Select a category
+          </option>
+          {KNOWN_CATEGORIES.map((c) => (
+            <option key={c} value={c}>
+              {c}
+            </option>
+          ))}
+        </select>
         <input
           aria-label="Price"
           placeholder="Price (e.g. 15.00)"
@@ -310,6 +378,20 @@ export default function AdminProductsView() {
           onChange={(event) => setVariantOption(event.target.value)}
           className={inputClasses}
         />
+        <input
+          aria-label="Image URL"
+          placeholder="Image URL (optional, defaults to category placeholder)"
+          value={imageUrl}
+          onChange={(event) => setImageUrl(event.target.value)}
+          className={inputClasses}
+        />
+        <input
+          aria-label="Product Type"
+          placeholder="Product Type (optional, e.g. Sativa, 10mg THC)"
+          value={productType}
+          onChange={(event) => setProductType(event.target.value)}
+          className={inputClasses}
+        />
         <button
           type="submit"
           disabled={isCreating}
@@ -324,6 +406,70 @@ export default function AdminProductsView() {
           {error}
         </p>
       )}
+
+      <form
+        onSubmit={handleCreateWeightVariants}
+        aria-label="Create weight variants"
+        className="mt-14 flex flex-col gap-4 border-t border-white/10 pt-10"
+      >
+        <p className="font-body text-xs tracking-[0.2em] uppercase text-brand-gold text-center">
+          Add Weight Variants (Flower / Hash)
+        </p>
+        <p className="font-body text-xs text-brand-smoke text-center">
+          Creates 5 products (1g / 3.5g / 7g / 14g / 28g) priced from a single per-gram rate.
+        </p>
+        <input
+          aria-label="Weight variant base name"
+          placeholder="Name (e.g. Cedar Haze)"
+          value={weightName}
+          onChange={(event) => setWeightName(event.target.value)}
+          className={inputClasses}
+          required
+        />
+        <select
+          aria-label="Weight variant category"
+          value={weightCategory}
+          onChange={(event) => setWeightCategory(event.target.value as "flower" | "hash")}
+          className={inputClasses}
+          required
+        >
+          <option value="flower">flower</option>
+          <option value="hash">hash</option>
+        </select>
+        <input
+          aria-label="Weight variant price per gram"
+          placeholder="Price per gram (e.g. 10.00)"
+          type="number"
+          step="0.01"
+          min="0.01"
+          value={pricePerGram}
+          onChange={(event) => setPricePerGram(event.target.value)}
+          className={inputClasses}
+          required
+        />
+        <input
+          aria-label="Weight variant description"
+          placeholder="Description (optional)"
+          value={weightDescription}
+          onChange={(event) => setWeightDescription(event.target.value)}
+          className={inputClasses}
+        />
+        <button
+          type="submit"
+          disabled={isCreatingWeightVariants}
+          className="inline-flex items-center justify-center border border-brand-gold text-brand-gold px-8 py-3 font-body text-sm tracking-[0.15em] uppercase transition-colors duration-300 hover:bg-brand-gold hover:text-black disabled:opacity-50"
+        >
+          {isCreatingWeightVariants ? "Creating..." : "Create Weight Variants"}
+        </button>
+        {weightError && (
+          <p role="alert" className="font-body text-sm text-red-400 text-center">
+            {weightError}
+          </p>
+        )}
+        {weightSuccess && (
+          <p className="font-body text-sm text-brand-gold text-center">{weightSuccess}</p>
+        )}
+      </form>
     </div>
   );
 }

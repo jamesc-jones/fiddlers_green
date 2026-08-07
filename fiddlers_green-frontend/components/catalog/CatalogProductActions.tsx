@@ -3,42 +3,25 @@
 import { useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useCart } from "@/contexts/CartContext";
-import type { Product } from "@/data/products";
-import type { PublicProduct } from "@/components/catalog/InteractiveCatalog";
+import type { PublicProduct } from "@/lib/catalogGrouping";
 
-export default function CatalogProductActions({
-  staticProduct,
-  backendProducts,
-}: {
-  staticProduct: Product;
-  backendProducts: PublicProduct[] | null;
-}) {
+export default function CatalogProductActions({ product }: { product: PublicProduct }) {
   const { user } = useAuth();
   const { addToCart } = useCart();
   const [isAdding, setIsAdding] = useState(false);
   const [error, setError] = useState("");
 
-  // Matching is by exact product name — the only correlation key
-  // available between the static catalog and the backend Product table
-  // (the static catalog's ids are hand-written slugs with no relationship
-  // to backend UUIDs). Fragile by nature; the mismatch-logging pass in
-  // InteractiveCatalog surfaces drift during development. Fail closed:
-  // no match, no button — never a broken button pointing at nothing.
-  const match = backendProducts?.find((p) => p.name === staticProduct.name) ?? null;
-
-  if (!match) return null;
-
   // Anonymous users get no cart controls at all: CartContext.addToCart
   // silently no-ops without a token (there's no anonymous cart), so
   // rendering the button here would offer an action that does nothing
-  // with no feedback. Same fail-closed pattern as the no-match case above.
+  // with no feedback. Fail-closed, same pattern used throughout catalog.
   if (!user) return null;
 
   async function handleAdd() {
     setIsAdding(true);
     setError("");
     try {
-      await addToCart(match!.id);
+      await addToCart(product.id);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not add item.");
     } finally {

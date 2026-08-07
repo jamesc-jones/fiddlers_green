@@ -2,29 +2,19 @@
 
 // Single fetch point for backend product data on the catalog page — one
 // GET /products call for the whole page, not one per category or per
-// card. CatalogCover and TableOfContents stay untouched server-rendered
-// siblings; only the category/product grid needs to know about backend
-// data, so only that part of the tree moves into this client component.
+// card. As of Phase 16.3 this is also the sole source of catalog content
+// (name, type, description, image): data/products.ts has been retired.
 import { useEffect, useState } from "react";
-import type { Category } from "@/data/products";
+import type { CategoryMeta } from "@/data/categories";
 import { getJson } from "@/lib/api";
 import CategorySection from "@/components/catalog/CategorySection";
+import type { PublicProduct } from "@/lib/catalogGrouping";
 
-export interface PublicProduct {
-  id: string;
-  name: string;
-  category: string;
-  description: string | null;
-  price: string | null;
-  is_active: boolean;
-  // Added in Phase 16.2 — only meaningful for gummy configuration products
-  // (see components/catalog/gummies/GummyVariantActions.tsx). NULL for
-  // every Flower/Hash/named-Gummies product.
-  dosage: string | null;
-  variant_option: string | null;
-}
+// Re-exported for existing consumers (e.g. GummyVariantActions.tsx) that
+// import the type from this module's original location.
+export type { PublicProduct };
 
-export default function InteractiveCatalog({ categories }: { categories: Category[] }) {
+export default function InteractiveCatalog({ categories }: { categories: CategoryMeta[] }) {
   const [backendProducts, setBackendProducts] = useState<PublicProduct[] | null>(null);
 
   useEffect(() => {
@@ -32,22 +22,6 @@ export default function InteractiveCatalog({ categories }: { categories: Categor
       .then(setBackendProducts)
       .catch(() => setBackendProducts([]));
   }, []);
-
-  useEffect(() => {
-    if (!backendProducts) return;
-    const backendNames = new Set(backendProducts.map((p) => p.name));
-    for (const category of categories) {
-      for (const staticProduct of category.products) {
-        if (!backendNames.has(staticProduct.name)) {
-          console.warn(
-            `[Catalog] No backend product match for "${staticProduct.name}" ` +
-              `(static id: ${staticProduct.id}). Add to Cart hidden for this ` +
-              `item — check for a name mismatch with the backend Product table.`
-          );
-        }
-      }
-    }
-  }, [backendProducts, categories]);
 
   return (
     <>

@@ -1,8 +1,10 @@
 """
 Admin-only product management endpoints.
 All routes require a valid admin JWT (enforced via Depends(require_admin)).
-The frontend's /catalog page reads from data/products.ts (static file) and is
-not affected by any changes made through these endpoints.
+As of Phase 16.3, the frontend's /catalog page reads live from GET /products
+(the public route backed by this same Product table) instead of a static
+file, so changes made through these endpoints are now directly reflected
+in the storefront.
 """
 import uuid
 import logging
@@ -14,9 +16,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from database import get_db
 from db_models.user import User
 from dependencies.auth import require_admin
-from models.product import ProductCreateRequest, ProductResponse, ProductUpdateRequest
+from models.product import (
+    ProductCreateRequest,
+    ProductResponse,
+    ProductUpdateRequest,
+    WeightVariantCreateRequest,
+)
 from repositories.product import (
     create_product,
+    create_weight_variant_products,
     get_product_by_id,
     list_products,
     soft_delete_product,
@@ -69,6 +77,33 @@ async def update_product_route(
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
     logger.info("Admin action: admin=%s action=update_product product_id=%s", admin.email, product_id)
     return updated
+
+
+@router.post(
+    "/products/weight-variants",
+    response_model=List[ProductResponse],
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_weight_variants_route(
+    request: WeightVariantCreateRequest,
+    db: AsyncSession = Depends(get_db),
+    admin: User = Depends(require_admin),
+):
+    """
+    Phase 16.3.1. Creates 5 Product rows (1g/3.5g/7g/14g/28g) for a single
+    Flower/Hash base product, priced from request.price_per_gram. See
+    repositories/product.py's create_weight_variant_products() and the
+    WEIGHT_VARIANTS constant for the derivation and column-role convention.
+    """
+    try:
+        products = await create_weight_variant_products(db, **request.model_dump())
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
+    logger.info(
+        "Admin action: admin=%s action=create_weight_variants base_name=%s category=%s count=%d",
+        admin.email, request.name, request.category, len(products),
+    )
+    return products
 
 
 @router.delete("/products/{product_id}", status_code=status.HTTP_204_NO_CONTENT)

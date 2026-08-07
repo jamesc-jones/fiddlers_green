@@ -1,9 +1,10 @@
 "use client";
 
 import { motion } from "framer-motion";
-import type { Category } from "@/data/products";
+import type { CategoryMeta } from "@/data/categories";
 import ProductCard from "@/components/catalog/ProductCard";
-import type { PublicProduct } from "@/components/catalog/InteractiveCatalog";
+import type { PublicProduct } from "@/lib/catalogGrouping";
+import { groupProductsForDisplay } from "@/lib/catalogGrouping";
 
 // Section-level entrance only — the one animation permitted at this level.
 const sectionVariants = {
@@ -19,9 +20,11 @@ export default function CategorySection({
   category,
   backendProducts,
 }: {
-  category: Category;
+  category: CategoryMeta;
   backendProducts: PublicProduct[] | null;
 }) {
+  const items = backendProducts ? groupProductsForDisplay(backendProducts, category.id) : [];
+
   return (
     <motion.section
       id={category.anchor}
@@ -42,13 +45,8 @@ export default function CategorySection({
         </div>
 
         <div className="mt-12 md:mt-16 grid grid-cols-2 lg:grid-cols-4 gap-x-6 gap-y-12 md:gap-x-8 md:gap-y-16">
-          {category.products.map((product, index) => (
-            <ProductCard
-              key={product.id}
-              product={product}
-              priority={index === 0}
-              backendProducts={backendProducts}
-            />
+          {items.map((item, index) => (
+            <ProductCard key={item.key} item={item} priority={index === 0} />
           ))}
         </div>
       </div>

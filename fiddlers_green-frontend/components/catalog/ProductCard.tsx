@@ -1,18 +1,21 @@
 import Image from "next/image";
-import type { Product } from "@/data/products";
+import type { DisplayItem } from "@/lib/catalogGrouping";
 import CategoryEffect from "@/components/catalog/CategoryEffect";
 import CatalogProductActions from "@/components/catalog/CatalogProductActions";
-import type { PublicProduct } from "@/components/catalog/InteractiveCatalog";
+import WeightVariantActions from "@/components/catalog/WeightVariantActions";
 
 export default function ProductCard({
-  product,
+  item,
   priority = false,
-  backendProducts,
 }: {
-  product: Product;
+  item: DisplayItem;
   priority?: boolean;
-  backendProducts: PublicProduct[] | null;
 }) {
+  const name = item.kind === "flat" ? item.product.name : item.baseName;
+  const category = item.kind === "flat" ? item.product.category : item.category;
+  const imageUrl = item.kind === "flat" ? item.product.image_url : item.image_url;
+  const productType = item.kind === "flat" ? item.product.product_type : item.product_type;
+
   return (
     <div className="group flex flex-col">
       <div
@@ -22,25 +25,31 @@ export default function ProductCard({
           "group-hover:scale-[1.03] group-hover:shadow-[0_0_32px_rgba(201,168,76,0.25)]",
         ].join(" ")}
       >
-        <Image
-          src={product.image}
-          alt={product.name}
-          fill
-          priority={priority}
-          sizes="(min-width: 1024px) 25vw, (min-width: 640px) 33vw, 50vw"
-          className="object-cover transition-[filter] duration-500 ease-out group-hover:brightness-110"
-        />
-        <CategoryEffect category={product.category} />
+        {imageUrl && (
+          <Image
+            src={imageUrl}
+            alt={name}
+            fill
+            priority={priority}
+            sizes="(min-width: 1024px) 25vw, (min-width: 640px) 33vw, 50vw"
+            className="object-cover transition-[filter] duration-500 ease-out group-hover:brightness-110"
+          />
+        )}
+        <CategoryEffect category={category} />
       </div>
 
       <div className="mt-4">
-        <p className="font-body text-[11px] tracking-[0.2em] text-brand-gold uppercase">
-          {product.type}
-        </p>
-        <h3 className="mt-1 font-display text-xl md:text-2xl text-brand-cream">
-          {product.name}
-        </h3>
-        <CatalogProductActions staticProduct={product} backendProducts={backendProducts} />
+        {productType && (
+          <p className="font-body text-[11px] tracking-[0.2em] text-brand-gold uppercase">
+            {productType}
+          </p>
+        )}
+        <h3 className="mt-1 font-display text-xl md:text-2xl text-brand-cream">{name}</h3>
+        {item.kind === "flat" ? (
+          <CatalogProductActions product={item.product} />
+        ) : (
+          <WeightVariantActions variants={item.variants} />
+        )}
       </div>
     </div>
   );

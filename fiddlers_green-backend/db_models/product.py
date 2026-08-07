@@ -1,6 +1,8 @@
 """
-Product catalog — scaffolded for Phase 15 admin CRUD.
-Not yet read by the frontend (which uses data/products.ts).
+Product catalog. As of Phase 16.3, this is the single source of truth
+for catalog rendering on the frontend (data/products.ts was removed) —
+previously it only backed the cart and admin CRUD, with the frontend
+catalog display driven by a separate static file.
 """
 import uuid
 from datetime import datetime, timezone
@@ -44,6 +46,16 @@ class Product(Base):
     # uniqueness constraint by design — kept minimal per the Phase 17 scope
     # that introduced this field.
     sku: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    # Added in Phase 16.3 — backend-driven catalog rendering. Nullable so
+    # existing rows are unaffected; the repository layer fills a
+    # category-based placeholder at creation time when omitted, matching
+    # this project's existing placeholder-asset convention (Phase 11).
+    image_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    # Added in Phase 16.3 — the display label shown above a product's name
+    # on its catalog card (e.g. "Sativa", "Full-Melt", "10mg THC"). Mirrors
+    # `dosage`'s column shape exactly; NULL for products that never had
+    # this concept (test/admin-created rows, gummy configuration variants).
+    product_type: Mapped[str | None] = mapped_column(String(100), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc)
