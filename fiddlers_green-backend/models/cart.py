@@ -9,6 +9,13 @@ from typing import Optional
 
 from pydantic import BaseModel, field_validator
 
+# Upper bound on a single cart line item's quantity. Only a lower bound
+# existed before Phase 17 — nothing stopped an arbitrarily large quantity
+# (e.g. a typo'd extra zero) from being written to the cart and factored
+# into total_price. 999 is generous for a retail cart while still catching
+# obvious bad input.
+MAX_CART_ITEM_QUANTITY = 999
+
 
 class CartAddRequest(BaseModel):
     product_id: uuid.UUID
@@ -19,6 +26,8 @@ class CartAddRequest(BaseModel):
     def quantity_positive(cls, v: int) -> int:
         if v < 1:
             raise ValueError("Quantity must be at least 1.")
+        if v > MAX_CART_ITEM_QUANTITY:
+            raise ValueError(f"Quantity cannot exceed {MAX_CART_ITEM_QUANTITY}.")
         return v
 
 
@@ -35,6 +44,8 @@ class CartUpdateRequest(BaseModel):
     def quantity_non_negative(cls, v: int) -> int:
         if v < 0:
             raise ValueError("Quantity must be zero or greater.")
+        if v > MAX_CART_ITEM_QUANTITY:
+            raise ValueError(f"Quantity cannot exceed {MAX_CART_ITEM_QUANTITY}.")
         return v
 
 

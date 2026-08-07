@@ -18,7 +18,7 @@ import uuid
 from decimal import Decimal
 from typing import Optional
 
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, Field, field_validator
 
 
 def _validate_sku(v: Optional[str]) -> Optional[str]:
@@ -34,23 +34,45 @@ def _validate_sku(v: Optional[str]) -> Optional[str]:
     return v
 
 
+def _validate_non_blank(v: str, label: str) -> str:
+    # Phase 17: the DB column allows any non-NULL string, including "" or
+    # whitespace-only — nothing previously stopped a blank name/category
+    # from being written. max_length is enforced separately via Field to
+    # match the actual DB column width (name/category are VARCHAR, not
+    # unbounded Text), so an overlong value fails cleanly here with a 422
+    # instead of as an unhandled DB-level "value too long" error.
+    if not v.strip():
+        raise ValueError(f"{label} cannot be blank.")
+    return v
+
+
 class ProductCreateRequest(BaseModel):
-    name: str
-    category: str
+    name: str = Field(max_length=255)
+    category: str = Field(max_length=100)
     description: Optional[str] = None
-    dosage: Optional[str] = None
-    pricing: Optional[str] = None
+    dosage: Optional[str] = Field(default=None, max_length=100)
+    pricing: Optional[str] = Field(default=None, max_length=100)
     # Required as of Phase 17: the cart does arithmetic on this field, not
     # on `pricing` (a legacy display string). Making it optional previously
     # let products be created with a price shown to admins but never
     # actually usable by the cart — see the Phase 17 product price
     # integrity fix for the incident this caused.
     price: Decimal
-    variant_option: Optional[str] = None
+    variant_option: Optional[str] = Field(default=None, max_length=50)
     # Added in Phase 17 — optional staff-facing identifier, distinct from
     # and never a substitute for product.id (the UUID cart/DB relationships
     # actually use). See _validate_sku above.
     sku: Optional[str] = None
+
+    @field_validator("name")
+    @classmethod
+    def name_not_blank(cls, v: str) -> str:
+        return _validate_non_blank(v, "Name")
+
+    @field_validator("category")
+    @classmethod
+    def category_not_blank(cls, v: str) -> str:
+        return _validate_non_blank(v, "Category")
 
     @field_validator("price")
     @classmethod
@@ -66,15 +88,28 @@ class ProductCreateRequest(BaseModel):
 
 
 class ProductUpdateRequest(BaseModel):
-    name: Optional[str] = None
-    category: Optional[str] = None
+    name: Optional[str] = Field(default=None, max_length=255)
+    category: Optional[str] = Field(default=None, max_length=100)
     description: Optional[str] = None
-    dosage: Optional[str] = None
-    pricing: Optional[str] = None
+    dosage: Optional[str] = Field(default=None, max_length=100)
+    pricing: Optional[str] = Field(default=None, max_length=100)
     price: Optional[Decimal] = None
     is_active: Optional[bool] = None
-    variant_option: Optional[str] = None
+    variant_option: Optional[str] = Field(default=None, max_length=50)
     sku: Optional[str] = None
+
+    @field_validator("name")
+    @classmethod
+    def name_not_blank_if_provided(cls, v: Optional[str]) -> Optional[str]:
+        # Only runs when "name" is actually present in the request body
+        # (same omitted-vs-provided distinction used for price/sku below) —
+        # an update that doesn't touch name is unaffected.
+        return _validate_non_blank(v, "Name") if v is not None else v
+
+    @field_validator("category")
+    @classmethod
+    def category_not_blank_if_provided(cls, v: Optional[str]) -> Optional[str]:
+        return _validate_non_blank(v, "Category") if v is not None else v
 
     @field_validator("price")
     @classmethod
