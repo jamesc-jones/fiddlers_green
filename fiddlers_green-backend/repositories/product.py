@@ -88,7 +88,13 @@ async def create_product(session: AsyncSession, **fields) -> Product:
     product = Product(**fields)
     session.add(product)
     await session.commit()
-    await session.refresh(product)
+    # Phase 17 perf: no refresh() — database.py's session factory sets
+    # expire_on_commit=False, and every Product column is either
+    # client-supplied (already in memory) or a Python-side `default`
+    # (id, is_active, created_at, updated_at), which SQLAlchemy populates
+    # on the in-memory object at flush time regardless — confirmed by
+    # direct testing. refresh() here was an extra DB round trip on every
+    # admin product creation for values already correct without it.
     logger.info("Product created: id=%s name=%s", product.id, product.name)
     return product
 
@@ -103,7 +109,10 @@ async def update_product(session: AsyncSession, product: Product, **fields) -> P
     for field, value in fields.items():
         setattr(product, field, value)
     await session.commit()
-    await session.refresh(product)
+    # Phase 17 perf: no refresh() — see the matching comment in
+    # create_product above. updated_at's `onupdate` callable is also
+    # Python-side and populates on the in-memory object at flush time,
+    # confirmed by direct testing.
     # Phase 17: this repository previously had no log line at all for
     # updates (create/soft-delete did). Logs field *names* only, never
     # values — some fields (description) can be long, and this is enough

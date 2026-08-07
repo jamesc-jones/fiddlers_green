@@ -68,7 +68,14 @@ async def add_to_cart(
     if existing:
         existing.quantity += quantity
         await session.commit()
-        await session.refresh(existing)
+        # Phase 17 perf: no refresh() — the session factory is configured
+        # with expire_on_commit=False (database.py), and every column here
+        # is either already in memory (quantity, set above) or a
+        # Python-side default populated at flush time (id, added_at) —
+        # confirmed by direct testing. The caller (routes/cart.py) also
+        # never uses this return value; it re-fetches the whole cart
+        # separately regardless, so refresh() was a pure wasted round
+        # trip on every single cart mutation.
         logger.info(
             "Cart item quantity updated: user=%s product=%s new_qty=%s",
             user_id, product_id, existing.quantity,
@@ -78,7 +85,6 @@ async def add_to_cart(
     item = CartItem(user_id=user_id, product_id=product_id, quantity=quantity)
     session.add(item)
     await session.commit()
-    await session.refresh(item)
     logger.info("Cart item added: user=%s product=%s qty=%s", user_id, product_id, quantity)
     return item
 
@@ -119,7 +125,8 @@ async def set_cart_item_quantity(
 
     item.quantity = quantity
     await session.commit()
-    await session.refresh(item)
+    # See the matching comment in add_to_cart above — refresh() here was
+    # equally unnecessary and equally unused by the caller.
     logger.info("Cart item quantity set: user=%s product=%s qty=%s", user_id, product_id, quantity)
     return item
 

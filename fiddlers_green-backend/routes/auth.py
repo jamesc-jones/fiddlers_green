@@ -51,7 +51,7 @@ async def login(request: LoginRequest, db: AsyncSession = Depends(get_db)) -> di
     # time alone — confirmed by direct measurement — which lets an
     # attacker enumerate registered emails through this endpoint.
     password_hash = user.password_hash if user else DUMMY_PASSWORD_HASH
-    password_valid = verify_password(request.password, password_hash)
+    password_valid = await verify_password(request.password, password_hash)
     if user is None or not password_valid:
         # Coverage gap (Phase 17 Step 4): login had no logging at all
         # before this. Logs the attempted email only — never the

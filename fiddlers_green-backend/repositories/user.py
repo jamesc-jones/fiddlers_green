@@ -40,11 +40,14 @@ async def create_user(
 
     user = User(
         email=email,
-        password_hash=hash_password(plain_password),
+        password_hash=await hash_password(plain_password),
         role=role,
     )
     session.add(user)
     await session.commit()
-    await session.refresh(user)
+    # Phase 17 perf: no refresh() — same reasoning as repositories/product.py
+    # and repositories/cart.py (expire_on_commit=False + Python-side
+    # defaults only; every User column here is either client-supplied or
+    # one of those defaults, confirmed by the same testing approach).
     logger.info("User created: id=%s email=%s role=%s", user.id, email, role)
     return user

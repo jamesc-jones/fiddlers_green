@@ -2,6 +2,7 @@
 Authentication utilities: password hashing and JWT management.
 This module has no FastAPI dependencies — it is a pure service layer.
 """
+import asyncio
 import os
 import logging
 from datetime import datetime, timedelta, timezone
@@ -42,12 +43,21 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 DUMMY_PASSWORD_HASH = "$2b$12$GteYqS03rECwrp4VuXwzbewByUZE4flo3Khh5cvcj2GkOmWs/9R7a"
 
 
-def hash_password(plain_password: str) -> str:
-    return pwd_context.hash(plain_password)
+async def hash_password(plain_password: str) -> str:
+    # Phase 17 perf: bcrypt is deliberately slow (~300-400ms at this
+    # project's cost factor, confirmed via Step 3's own timing
+    # measurements). Both register() and login() are `async def` routes,
+    # and a synchronous call here would block the entire event loop for
+    # that whole duration — no other request of any kind could be served
+    # by this worker while one login was hashing/verifying a password.
+    # asyncio.to_thread offloads the blocking bcrypt call to a worker
+    # thread, matching the same pattern already used correctly in
+    # email_service.py for blocking smtplib calls.
+    return await asyncio.to_thread(pwd_context.hash, plain_password)
 
 
-def verify_password(plain_password: str, hashed_password: str) -> bool:
-    return pwd_context.verify(plain_password, hashed_password)
+async def verify_password(plain_password: str, hashed_password: str) -> bool:
+    return await asyncio.to_thread(pwd_context.verify, plain_password, hashed_password)
 
 
 # ---------------------------------------------------------------------------
