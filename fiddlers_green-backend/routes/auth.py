@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from database import get_db
 from db_models.user import User
 from dependencies.auth import get_current_user
+from dependencies.rate_limit import RateLimiter
 from models.auth import LoginRequest, RegisterRequest, TokenResponse, UserResponse
 from repositories.user import create_user, get_user_by_email
 from services.auth_service import DUMMY_PASSWORD_HASH, create_access_token, verify_password
@@ -17,8 +18,19 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
+# Phase 17.5 audit fix: login/register had no rate limiting at all, leaving
+# login open to brute force and register open to spam account creation.
+# One shared limiter instance is fine — its internal key includes the
+# request path, so /auth/login and /auth/register are counted separately.
+auth_rate_limiter = RateLimiter(max_requests=5, window_seconds=60)
 
-@router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
+
+@router.post(
+    "/register",
+    response_model=UserResponse,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(auth_rate_limiter)],
+)
 async def register(request: RegisterRequest, db: AsyncSession = Depends(get_db)) -> User:
     """
     Register a new customer account.
@@ -36,7 +48,7 @@ async def register(request: RegisterRequest, db: AsyncSession = Depends(get_db))
     return user
 
 
-@router.post("/login", response_model=TokenResponse)
+@router.post("/login", response_model=TokenResponse, dependencies=[Depends(auth_rate_limiter)])
 async def login(request: LoginRequest, db: AsyncSession = Depends(get_db)) -> dict:
     """
     Authenticate and return a JWT access token.

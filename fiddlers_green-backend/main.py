@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import os
 
@@ -6,7 +7,10 @@ from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from sqlalchemy import text
+from sqlalchemy.exc import OperationalError
 
+from database import AsyncSessionLocal
 from logging_config import RequestIdMiddleware, setup_logging
 from routes import chat, contact
 from routes.auth import router as auth_router
@@ -69,6 +73,40 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
     return JSONResponse(status_code=422, content={"detail": messages})
 
 
+async def db_unavailable_handler(request: Request, exc: Exception) -> JSONResponse:
+    """
+    Phase 17.5 audit fix: a database outage previously fell through to the
+    generic Exception handler below and returned a 500 indistinguishable
+    from a real application bug.
+
+    Registered for both OperationalError and OSError (see the two
+    add_exception_handler calls below) rather than just OperationalError:
+    live testing against an actual stopped `db` container showed
+    SQLAlchemy's async connection pool re-raises the raw DBAPI/socket
+    exception unwrapped on a failed connection attempt (socket.gaierror
+    when the container is stopped, ConnectionRefusedError when the port is
+    merely closed, TimeoutError on a hung attempt) — never an
+    OperationalError. All three are OSError subclasses, and OSError is not
+    otherwise raised anywhere in this app without already being caught
+    locally (email_service.py and ai_service.py each catch their own
+    network exceptions and translate them to a 502), so it's safe to treat
+    any OSError reaching this far as a database/connectivity failure.
+
+    Starlette matches exception handlers by the most specific registered
+    type in the exception's MRO, so both registrations win over the
+    catch-all Exception handler below regardless of registration order.
+    """
+    logger.error("Database unavailable on %s %s: %s", request.method, request.url.path, exc)
+    return JSONResponse(
+        status_code=503,
+        content={"detail": "Service temporarily unavailable. Please try again later."},
+    )
+
+
+app.add_exception_handler(OperationalError, db_unavailable_handler)
+app.add_exception_handler(OSError, db_unavailable_handler)
+
+
 @app.exception_handler(Exception)
 async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
     """
@@ -84,4 +122,30 @@ async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONR
 
 @app.get("/health")
 async def health():
+    """
+    Phase 17.5 audit fix: previously always returned 200 regardless of
+    database state, so a container orchestrator or uptime monitor would
+    report "healthy" during a total DB outage. Runs a minimal SELECT 1
+    with a short timeout so a hung connection attempt can't hang this
+    endpoint itself.
+    """
+    if AsyncSessionLocal is None:
+        return JSONResponse(
+            status_code=503,
+            content={"status": "unavailable", "detail": "Database not configured."},
+        )
+
+    async def _ping_db() -> None:
+        async with AsyncSessionLocal() as session:
+            await session.execute(text("SELECT 1"))
+
+    try:
+        await asyncio.wait_for(_ping_db(), timeout=3)
+    except Exception:
+        logger.error("Health check failed: database unreachable", exc_info=True)
+        return JSONResponse(
+            status_code=503,
+            content={"status": "unavailable", "detail": "Database unreachable."},
+        )
+
     return {"status": "ok"}
