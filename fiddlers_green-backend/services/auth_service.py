@@ -22,10 +22,49 @@ JWT_ACCESS_TOKEN_EXPIRE_MINUTES: int = int(
     os.getenv("JWT_ACCESS_TOKEN_EXPIRE_MINUTES", "60")
 )
 
+# Phase 17.5 audit: previously the only check was "is it non-empty" — a
+# guessable placeholder string (including the literal example text from
+# .env.example/.env.local.example below) passed that check and let the app
+# issue real, forgeable JWTs with no warning. MIN_JWT_SECRET_LENGTH=32
+# matches the shortest output `secrets.token_hex(16)` could produce; the
+# denylist catches the exact placeholder strings that exist in this repo's
+# own example files and would otherwise be copy-pasted verbatim.
+MIN_JWT_SECRET_LENGTH = 32
+_KNOWN_WEAK_JWT_SECRETS = {
+    "your-strong-secret-here",
+    "change-this-to-a-strong-random-secret-before-production",
+    "secret",
+    "changeme",
+    "change-me",
+    "password",
+    "jwt-secret",
+    "test",
+    "testing",
+}
+
+
+def _is_weak_jwt_secret(secret: str) -> bool:
+    if len(secret) < MIN_JWT_SECRET_LENGTH:
+        return True
+    if secret.strip().lower() in _KNOWN_WEAK_JWT_SECRETS:
+        return True
+    return False
+
+
+JWT_SECRET_IS_VALID = bool(JWT_SECRET) and not _is_weak_jwt_secret(JWT_SECRET)
+
 if not JWT_SECRET:
     logger.warning(
         "JWT_SECRET is not set. Authentication will not work. "
         "Set JWT_SECRET in your .env file."
+    )
+elif not JWT_SECRET_IS_VALID:
+    logger.warning(
+        "JWT_SECRET is set but is too weak or a known placeholder value "
+        "(minimum %d characters, must not be a default/example value). "
+        "Authentication will not work until a strong secret is set. "
+        "Generate one with: python -c \"import secrets; print(secrets.token_hex(32))\"",
+        MIN_JWT_SECRET_LENGTH,
     )
 
 # ---------------------------------------------------------------------------
@@ -73,8 +112,8 @@ def create_access_token(
     subject: typically the user's email or UUID string.
     role: 'admin' or 'customer'.
     """
-    if not JWT_SECRET:
-        raise RuntimeError("JWT_SECRET is not configured.")
+    if not JWT_SECRET_IS_VALID:
+        raise RuntimeError("JWT_SECRET is not configured or is too weak.")
     expire = datetime.now(timezone.utc) + (
         expires_delta or timedelta(minutes=JWT_ACCESS_TOKEN_EXPIRE_MINUTES)
     )
@@ -92,6 +131,6 @@ def decode_access_token(token: str) -> dict:
     Decodes and validates a JWT.
     Raises JWTError on invalid or expired tokens — caller handles this.
     """
-    if not JWT_SECRET:
-        raise RuntimeError("JWT_SECRET is not configured.")
+    if not JWT_SECRET_IS_VALID:
+        raise RuntimeError("JWT_SECRET is not configured or is too weak.")
     return jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
