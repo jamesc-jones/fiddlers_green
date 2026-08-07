@@ -7,6 +7,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
+from logging_config import RequestIdMiddleware, setup_logging
 from routes import chat, contact
 from routes.auth import router as auth_router
 from routes.admin import router as admin_router
@@ -15,6 +16,7 @@ from routes.cart import router as cart_router
 from routes.products import router as products_router
 
 load_dotenv()
+setup_logging()
 
 logger = logging.getLogger(__name__)
 
@@ -35,6 +37,12 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+# Added after CORSMiddleware so it wraps outermost (Starlette applies
+# middleware in reverse of add order) — the request ID must be set before
+# anything else in the pipeline runs, so every log line produced while
+# handling this request (including CORS/validation/exception-handler
+# logging) is tagged.
+app.add_middleware(RequestIdMiddleware)
 
 app.include_router(contact.router)
 app.include_router(chat.router)

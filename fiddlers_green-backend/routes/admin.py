@@ -32,12 +32,17 @@ router = APIRouter(prefix="/admin", tags=["admin"])
 async def create_product_route(
     request: ProductCreateRequest,
     db: AsyncSession = Depends(get_db),
-    _admin: User = Depends(require_admin),
+    admin: User = Depends(require_admin),
 ):
     try:
-        return await create_product(db, **request.model_dump())
+        product = await create_product(db, **request.model_dump())
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
+    # Coverage gap (Phase 17 Step 4): repositories/product.py already logs
+    # that a product was created, but not who created it — admin identity
+    # is only available here at the route layer, not in the repository.
+    logger.info("Admin action: admin=%s action=create_product product_id=%s", admin.email, product.id)
+    return product
 
 
 @router.get("/products", response_model=List[ProductResponse])
@@ -53,24 +58,27 @@ async def update_product_route(
     product_id: uuid.UUID,
     request: ProductUpdateRequest,
     db: AsyncSession = Depends(get_db),
-    _admin: User = Depends(require_admin),
+    admin: User = Depends(require_admin),
 ):
     product = await get_product_by_id(db, product_id)
     if product is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Product not found.")
     try:
-        return await update_product(db, product, **request.model_dump(exclude_unset=True))
+        updated = await update_product(db, product, **request.model_dump(exclude_unset=True))
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
+    logger.info("Admin action: admin=%s action=update_product product_id=%s", admin.email, product_id)
+    return updated
 
 
 @router.delete("/products/{product_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_product_route(
     product_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-    _admin: User = Depends(require_admin),
+    admin: User = Depends(require_admin),
 ) -> None:
     product = await get_product_by_id(db, product_id)
     if product is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Product not found.")
     await soft_delete_product(db, product)
+    logger.info("Admin action: admin=%s action=deactivate_product product_id=%s", admin.email, product_id)

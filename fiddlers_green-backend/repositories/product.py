@@ -104,6 +104,11 @@ async def update_product(session: AsyncSession, product: Product, **fields) -> P
         setattr(product, field, value)
     await session.commit()
     await session.refresh(product)
+    # Phase 17: this repository previously had no log line at all for
+    # updates (create/soft-delete did). Logs field *names* only, never
+    # values — some fields (description) can be long, and this is enough
+    # to answer "what changed" without duplicating the DB row in logs.
+    logger.info("Product updated: id=%s fields=%s", product.id, list(fields.keys()))
     return product
 
 

@@ -53,16 +53,22 @@ async def login(request: LoginRequest, db: AsyncSession = Depends(get_db)) -> di
     password_hash = user.password_hash if user else DUMMY_PASSWORD_HASH
     password_valid = verify_password(request.password, password_hash)
     if user is None or not password_valid:
+        # Coverage gap (Phase 17 Step 4): login had no logging at all
+        # before this. Logs the attempted email only — never the
+        # password — same as every other log call site in this codebase.
+        logger.warning("Login failed: email=%s", request.email)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect email or password.",
             headers={"WWW-Authenticate": "Bearer"},
         )
     if not user.is_active:
+        logger.warning("Login rejected (inactive account): email=%s", user.email)
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Account is deactivated.",
         )
+    logger.info("Login succeeded: email=%s role=%s", user.email, user.role)
     token = create_access_token(subject=user.email, role=user.role)
     return {"access_token": token, "token_type": "bearer"}
 
