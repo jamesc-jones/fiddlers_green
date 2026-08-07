@@ -32,6 +32,15 @@ if not JWT_SECRET:
 # ---------------------------------------------------------------------------
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
+# Phase 17 security review: a static, valid bcrypt hash with no real
+# corresponding password. routes/auth.py's login() verifies against this
+# when the email doesn't match any user, so that a nonexistent-email
+# request costs the same bcrypt-verify time as a wrong-password request —
+# confirmed via live timing measurement that without this, the two cases
+# were trivially distinguishable (~0.01s vs ~0.35s), letting an attacker
+# enumerate registered emails through /auth/login alone.
+DUMMY_PASSWORD_HASH = "$2b$12$GteYqS03rECwrp4VuXwzbewByUZE4flo3Khh5cvcj2GkOmWs/9R7a"
+
 
 def hash_password(plain_password: str) -> str:
     return pwd_context.hash(plain_password)

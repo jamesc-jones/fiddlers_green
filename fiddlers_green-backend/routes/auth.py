@@ -11,7 +11,7 @@ from db_models.user import User
 from dependencies.auth import get_current_user
 from models.auth import LoginRequest, RegisterRequest, TokenResponse, UserResponse
 from repositories.user import create_user, get_user_by_email
-from services.auth_service import create_access_token, verify_password
+from services.auth_service import DUMMY_PASSWORD_HASH, create_access_token, verify_password
 
 logger = logging.getLogger(__name__)
 
@@ -43,7 +43,16 @@ async def login(request: LoginRequest, db: AsyncSession = Depends(get_db)) -> di
     Works for both admin and customer accounts.
     """
     user = await get_user_by_email(db, request.email)
-    if user is None or not verify_password(request.password, user.password_hash):
+    # Security review (Phase 17): verify_password always runs, even when
+    # no user matches — against DUMMY_PASSWORD_HASH in that case. Without
+    # this, a nonexistent email short-circuited before the (deliberately
+    # slow) bcrypt check ever ran, making "wrong password" (~0.35s) and
+    # "no such account" (~0.01s) trivially distinguishable by response
+    # time alone — confirmed by direct measurement — which lets an
+    # attacker enumerate registered emails through this endpoint.
+    password_hash = user.password_hash if user else DUMMY_PASSWORD_HASH
+    password_valid = verify_password(request.password, password_hash)
+    if user is None or not password_valid:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect email or password.",
